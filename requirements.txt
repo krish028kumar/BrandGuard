@@ -6,4 +6,4 @@ python-docx
 Pillow
 pytesseract
 pdf2image
-
+libsql
