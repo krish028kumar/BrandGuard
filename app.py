@@ -50,7 +50,10 @@ def api_key():
     return _setting("OPENROUTER_API_KEY")
 
 def has_key():
-    return bool(api_key())
+    return bool(
+        _setting("OPENAI_API_KEY") or
+        _setting("OPENROUTER_API_KEY")
+    )
 
 def model_name():
     return _setting("OPENROUTER_MODEL", "openrouter/free")
@@ -179,14 +182,14 @@ with T_review:
                                 placeholder="Paste a post, caption, email or ad copy here…")
         if has_key():
             use_ai = st.checkbox(
-                "🤖 Run multilingual AI moderation + brand check (OpenRouter; sends this text to an external service)",
+                "🤖 Run multilingual AI moderation + brand check (OpenAI primary, OpenRouter fallback; sends text externally)",
                 True
             )
         else:
             use_ai = False
             st.warning(
-                "OpenRouter AI moderation is not configured. This run will check only your local rulebook, "
-                "so it cannot be marked fully verified. Add OPENROUTER_API_KEY to Streamlit secrets."
+               "AI moderation is not configured. This run will check only your local rulebook. "
+               "Add OPENAI_API_KEY or OPENROUTER_API_KEY to Streamlit secrets."
             )
         if st.button("🚀 Run review", type="primary"):
             if not text.strip():
@@ -277,7 +280,7 @@ with T_review:
 with T_image:
     st.markdown("#### 🖼️ Image review")
     st.caption("Upload a post image or banner. BrandGuard runs quick local checks (alt text, size, contrast, brand colours) and, "
-               "when configured, an AI vision review that reads the text inside the image (English, Hindi, Hinglish) and looks for unsafe content.")
+              "when configured, an AI vision review (OpenAI primary, OpenRouter fallback) that reads the text inside the image (English, Hindi, Hinglish) and looks for unsafe content.")
     img = st.file_uploader("Upload an image (.png, .jpg, .jpeg, .webp)", type=["png", "jpg", "jpeg", "webp"], key="img_up")
     alt = st.text_input("Alt text: describe the image for screen-reader users", key="img_alt")
     if img is not None:
