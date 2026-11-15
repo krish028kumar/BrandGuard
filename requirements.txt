@@ -1,3 +1,9 @@
 streamlit
 pandas
 anthropic
+pypdf
+python-docx
+Pillow
+pytesseract
+pdf2image
+
