@@ -1,0 +1,177 @@
+"""UI helpers for BrandGuard: styles and HTML snippets (no Streamlit import)."""
+import html
+
+SEV = {"Critical": "#C92A2A", "High": "#FF6B6B", "Medium": "#F59F00", "Low": "#339AF0"}
+ICON = {"Safety": "🚫", "Terminology": "📖", "Tone": "🎭", "Claim": "⚠️", "Fact": "🧾", "Accessibility": "♿"}
+W = {"Critical": 60, "High": 10, "Medium": 6, "Low": 3}
+E = lambda s: html.escape(str(s), quote=True)
+
+CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+html, body, .stApp, button, input, textarea {font-family:'Inter',sans-serif;}
+.stApp{background:linear-gradient(160deg,#F6F4FF 0%,#EEF6FF 55%,#F3FFFB 100%);}
+.block-container{padding-top:1.2rem;max-width:1200px;}
+[data-testid="stSidebar"]{background:#FFFFFF;border-right:1px solid #ECE9FF;}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+@keyframes shine{0%{background-position:0 0}100%{background-position:200% 0}}
+.hero{position:relative;overflow:hidden;border-radius:24px;padding:28px 34px;color:#fff;
+ background:linear-gradient(120deg,#6C5CE7 0%,#4C6EF5 55%,#15AABF 100%);
+ box-shadow:0 18px 40px rgba(76,110,245,.28);animation:fadeUp .7s ease both;}
+.hero-in{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:2}
+.hero .logo{font-size:2.2rem;font-weight:800;letter-spacing:-.5px}
+.hero .tag{opacity:.95;margin:.3rem 0 1rem;font-size:1.05rem}
+.pills span{display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);
+ padding:5px 13px;border-radius:999px;margin:0 8px 6px 0;font-size:.82rem;font-weight:600}
+.mascot{font-size:4.4rem;animation:float 3s ease-in-out infinite;filter:drop-shadow(0 8px 12px rgba(0,0,0,.25))}
+.orb{position:absolute;border-radius:50%;opacity:.18;background:#fff}
+.o1{width:230px;height:230px;right:-60px;top:-90px;animation:float 6s ease-in-out infinite}
+.o2{width:120px;height:120px;left:42%;bottom:-60px;animation:float 5s ease-in-out infinite reverse}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 10px}
+.step{background:#fff;border-radius:16px;padding:12px 14px;box-shadow:0 6px 18px rgba(30,27,75,.07);
+ display:flex;gap:10px;align-items:center;animation:fadeUp .7s ease both;transition:transform .2s}
+.step:hover{transform:translateY(-3px)}
+.step b{display:block;color:#1E1B4B;font-size:.88rem}.step small{color:#6B6890}.step .n{font-size:1.6rem}
+.stTabs [data-baseweb="tab-list"]{gap:6px;background:#fff;padding:6px;border-radius:14px;box-shadow:0 6px 18px rgba(30,27,75,.06)}
+.stTabs [data-baseweb="tab"]{border-radius:10px;padding:8px 16px;font-weight:700}
+.stTabs [aria-selected="true"]{background:linear-gradient(120deg,#6C5CE7,#4C6EF5)}
+.stTabs [aria-selected="true"] p{color:#fff !important}
+.stTabs [data-baseweb="tab-highlight"],.stTabs [data-baseweb="tab-border"]{display:none}
+.stButton>button{border-radius:12px;font-weight:700;border:1px solid #D9D4FF;transition:all .2s}
+.stButton>button:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(108,92,231,.25);border-color:#6C5CE7}
+.stButton>button[kind="primary"],.stButton>button[data-testid="stBaseButton-primary"]{
+ background:linear-gradient(120deg,#6C5CE7,#4C6EF5);color:#fff;border:none}
+.stTextArea textarea,.stTextInput input{border-radius:12px}
+.score{display:flex;gap:24px;align-items:center;background:#fff;border-radius:22px;padding:18px 24px;
+ box-shadow:0 10px 28px rgba(30,27,75,.09);animation:pop .6s ease both;margin:6px 0 14px}
+.ring{position:relative;width:116px;height:116px;border-radius:50%;flex:none;display:grid;place-items:center;
+ background:conic-gradient(var(--c) calc(var(--p)*1%),#E9E6FB 0)}
+.ring::before{content:"";position:absolute;inset:11px;border-radius:50%;background:#fff}
+.ring span{position:relative;font-weight:800;font-size:1.95rem;color:#1E1B4B}
+.ring small{position:absolute;bottom:20px;font-size:.62rem;color:#8A86B0;font-weight:600;letter-spacing:.5px}
+.face{font-size:2.8rem;display:inline-block;animation:float 2.6s ease-in-out infinite;margin-right:8px;vertical-align:middle}
+.verdict b{font-size:1.35rem;color:#1E1B4B;vertical-align:middle}
+.verdict p{margin:2px 0 10px;color:#6B6890}
+.chip{display:inline-block;padding:4px 11px;border-radius:999px;font-size:.78rem;font-weight:700;margin:0 6px 4px 0}
+.chip.critical{background:#C92A2A;color:#fff}.chip.high{background:#FFE3E3;color:#C92A2A}.chip.medium{background:#FFF3BF;color:#B35C00}
+.chip.low{background:#D0EBFF;color:#1864AB}.chip.ok{background:#D3F9D8;color:#2B8A3E}
+.chip.st-pending{background:#E7E3FF;color:#5F3DC4}.chip.st-approved{background:#D3F9D8;color:#2B8A3E}
+.chip.st-changes{background:#FFF3BF;color:#B35C00}.chip.st-rejected{background:#FFE3E3;color:#C92A2A}
+.panel{background:#fff;border-radius:18px;padding:16px 18px;box-shadow:0 8px 22px rgba(30,27,75,.07);
+ color:#1E1B4B;animation:fadeUp .6s ease both}
+.panel h4{margin:0 0 8px;font-size:.95rem;color:#4C3FB5}
+.annot{line-height:1.95;white-space:pre-wrap;color:#1E1B4B}
+mark.hl{padding:2px 7px;border-radius:8px;font-weight:700;cursor:help;animation:pop .5s ease both}
+mark.hl-critical{background:#C92A2A;color:#fff;box-shadow:inset 0 -2px 0 #7D1313}
+mark.hl-high{background:#FFE3E3;color:#C92A2A;box-shadow:inset 0 -2px 0 #FF6B6B}
+mark.hl-medium{background:#FFF3BF;color:#B35C00;box-shadow:inset 0 -2px 0 #F59F00}
+mark.hl-low{background:#D0EBFF;color:#1864AB;box-shadow:inset 0 -2px 0 #339AF0}
+.fcard{background:#fff;border-radius:16px;padding:14px 16px;border-left:6px solid var(--s);
+ box-shadow:0 6px 18px rgba(30,27,75,.07);animation:fadeUp .5s ease both;color:#1E1B4B}
+.fhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.fhead .ic{font-size:1.3rem}
+.pill{background:#F1EEFF;color:#5F3DC4;border-radius:8px;padding:2px 9px;font-size:.74rem;font-weight:700}
+.fquote{font-weight:800;margin:2px 0 4px}
+.fwhy{color:#3B3866}.fmeta{color:#7A77A3;font-size:.8rem;margin-top:6px}
+.fsug{margin-top:6px;background:#F3FFFB;border:1px dashed #20C997;border-radius:10px;padding:6px 10px;font-size:.86rem}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+.mcard{background:#fff;border-radius:18px;padding:16px 18px;box-shadow:0 8px 22px rgba(30,27,75,.07);animation:pop .6s ease both}
+.mcard .v{font-size:2rem;font-weight:800;color:#4C3FB5}.mcard .l{color:#6B6890;font-weight:600;font-size:.85rem}
+.empty{text-align:center;padding:34px;background:#fff;border-radius:20px;box-shadow:0 8px 22px rgba(30,27,75,.07)}
+.empty .big{font-size:3.4rem;display:inline-block;animation:float 3s ease-in-out infinite}
+.pcard{border-radius:16px;padding:14px;background:linear-gradient(135deg,#6C5CE7,#4C6EF5);color:#fff;margin:8px 0 12px}
+.pcard .av{font-size:2rem}.pcard small{opacity:.85}
+.privacy{background:#F3FFFB;border:1px solid #B2F2E4;border-radius:14px;padding:12px;font-size:.8rem;color:#0B7A68;margin-top:10px}
+.diffbox{line-height:1.95;color:#1E1B4B}
+.foot{text-align:center;color:#8A86B0;font-size:.8rem;margin:26px 0 6px}
+</style>
+"""
+
+def score_of(F):
+    s = max(0, 100 - sum(W[f["severity"]] for f in F))
+    if any(f["severity"] == "Critical" for f in F):
+        return min(s, 8)
+    if any(f["category"] == "Safety" for f in F):
+        return min(s, 40)
+    return s
+
+def mood(s):
+    if s >= 90: return "😄", "Looking great", "Ready for a quick human check."
+    if s >= 70: return "🙂", "Almost there", "A few fixes will make it on-brand."
+    if s >= 45: return "😟", "Needs work", "Several issues could hurt credibility."
+    return "😰", "High risk", "Please do not publish before fixing these."
+
+def color_of(s):
+    return "#12B886" if s >= 80 else ("#F59F00" if s >= 50 else "#FF6B6B")
+
+def hero():
+    return ('<div class="hero"><div class="orb o1"></div><div class="orb o2"></div><div class="hero-in"><div>'
+            '<div class="logo">🛡️ BrandGuard</div>'
+            '<div class="tag">Catch off-brand content before the world does.</div>'
+            '<div class="pills"><span>🔍 Explainable findings</span><span>🧑‍⚖️ Humans decide</span>'
+            '<span>🔒 Private by design</span><span>📚 Cites your rulebook</span></div></div>'
+            '<div class="mascot">🤖</div></div></div>')
+
+def steps():
+    items = [("📘", "1. Rulebook", "Approved rules and facts"), ("✍️", "2. Draft", "Paste your content"),
+             ("🔍", "3. Review", "Explained findings and fixes"), ("✅", "4. Approve", "A human signs off")]
+    return '<div class="steps">' + "".join(
+        '<div class="step"><span class="n">%s</span><div><b>%s</b><small>%s</small></div></div>' % i for i in items) + "</div>"
+
+def score_card(F):
+    s = score_of(F)
+    face, head, sub = mood(s)
+    if any(f["severity"] == "Critical" for f in F):
+        face, head, sub = "🚫", "Blocked: unsafe content", "A human reviewer must look at this. Do not publish."
+    cnt = {k: sum(1 for f in F if f["severity"] == k) for k in ("Critical", "High", "Medium", "Low")}
+    chips = "".join('<span class="chip %s">%s %d</span>' % (k.lower(), k, v) for k, v in cnt.items() if v)
+    if not chips:
+        chips = '<span class="chip ok">✔ No issues found</span>'
+    return ('<div class="score"><div class="ring" style="--p:%d;--c:%s"><span>%d</span><small>BRAND SCORE</small></div>'
+            '<div class="verdict"><span class="face">%s</span><b>%s</b><p>%s</p>%s</div></div>'
+            % (s, color_of(s), s, face, head, sub, chips))
+
+def annotate(text, F):
+    out, pos, last = [], 0, 0
+    for f in sorted(F, key=lambda x: x["start"]):
+        if f["start"] < last:
+            continue
+        out.append(E(text[pos:f["start"]]))
+        out.append('<mark class="hl hl-%s" title="%s">%s</mark>' % (
+            f["severity"].lower(), E("%s: %s" % (f["rule"], f["why"])), E(text[f["start"]:f["end"]])))
+        pos = last = f["end"]
+    out.append(E(text[pos:]))
+    return '<div class="panel"><h4>🖍️ Your draft, highlighted (hover a highlight)</h4><div class="annot">%s</div></div>' % "".join(out)
+
+def finding_card(f):
+    return ('<div class="fcard" style="--s:%s"><div class="fhead"><span class="ic">%s</span><b>%s</b>'
+            '<span class="pill">%s</span><span class="chip %s">%s</span></div>'
+            '<div class="fquote">“%s”</div><div class="fwhy">%s</div>'
+            '<div class="fmeta">📚 %s &nbsp;·&nbsp; 🎯 %s</div><div class="fsug">💡 %s</div></div>'
+            % (SEV[f["severity"]], ICON.get(f["category"], "🔎"), E(f["category"]), E(f["rule"]),
+               f["severity"].lower(), f["severity"], E(f["text"]), E(f["why"]),
+               E(f["source"]), E(f["confidence"]), E(f["suggestion"])))
+
+def panel(title, inner):
+    return '<div class="panel"><h4>%s</h4><div class="diffbox">%s</div></div>' % (title, inner)
+
+def metric_cards(items):
+    return '<div class="mgrid">' + "".join(
+        '<div class="mcard"><div class="v">%s</div><div class="l">%s</div></div>' % i for i in items) + "</div>"
+
+def status_chip(status):
+    cls = {"Approved": "st-approved", "Rejected": "st-rejected", "Changes requested": "st-changes"}.get(status, "st-pending")
+    icon = {"Approved": "✅", "Rejected": "⛔", "Changes requested": "✏️"}.get(status, "⏳")
+    return '<span class="chip %s">%s %s</span>' % (cls, icon, E(status))
+
+def profile_card(name, role, icon):
+    return '<div class="pcard"><span class="av">%s</span> <b>%s</b><br><small>Signed in as %s</small></div>' % (icon, E(name), E(role))
+
+def privacy_card():
+    return ('<div class="privacy">🔒 <b>AI &amp; privacy</b><br>Checks run as local rules. The optional AI second opinion '
+            'sends the draft to an external service (Claude by Anthropic), only when you click it.</div>')
+
+def empty(emoji, title, sub):
+    return '<div class="empty"><div class="big">%s</div><h3>%s</h3><p>%s</p></div>' % (emoji, E(title), E(sub))

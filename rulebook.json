@@ -1,0 +1,149 @@
+{
+ "company": "BrightCart (sample brand used for the demo)",
+ "version": "Guidelines v1",
+ "tone": {
+  "summary": "Friendly, clear and helpful. No hype, no pressure.",
+  "hype_words": [
+   "amazing",
+   "revolutionary",
+   "mind-blowing",
+   "incredible",
+   "game-changing",
+   "unbelievable",
+   "life-changing"
+  ],
+  "pressure_phrases": [
+   "hurry",
+   "last chance",
+   "act now",
+   "don't miss out",
+   "limited time only"
+  ],
+  "allowed_caps": [
+   "UPI",
+   "COD",
+   "FAQ",
+   "USA",
+   "IST",
+   "EMI",
+   "OTP",
+   "FREE"
+  ]
+ },
+ "terminology": [
+  {
+   "id": "TM1",
+   "bad": [
+    "cheap"
+   ],
+   "preferred": "affordable",
+   "why": "The brand voice avoids 'cheap'; it says 'affordable'.",
+   "case_sensitive": false
+  },
+  {
+   "id": "TM2",
+   "bad": [
+    "users",
+    "customers"
+   ],
+   "preferred": "shoppers",
+   "why": "BrightCart calls its buyers 'shoppers'.",
+   "case_sensitive": false
+  },
+  {
+   "id": "TM3",
+   "bad": [
+    "BrightKart",
+    "Bright Cart",
+    "Brightcart",
+    "BRIGHTCART"
+   ],
+   "preferred": "BrightCart",
+   "why": "The brand name is always written 'BrightCart'.",
+   "case_sensitive": true
+  }
+ ],
+ "claims": [
+  {
+   "pattern": "100%\\s+guaranteed",
+   "soft": "dependable"
+  },
+  {
+   "pattern": "guaranteed",
+   "soft": "reliable"
+  },
+  {
+   "pattern": "\\b(?:the\\s+)?best\\b",
+   "soft": "a great"
+  },
+  {
+   "pattern": "\\bfastest\\b",
+   "soft": "fast"
+  },
+  {
+   "pattern": "\\bcheapest\\b",
+   "soft": "affordable"
+  },
+  {
+   "pattern": "risk[- ]free",
+   "soft": "low-risk"
+  },
+  {
+   "pattern": "\\bunbeatable\\b",
+   "soft": "great"
+  },
+  {
+   "pattern": "world[- ]class",
+   "soft": "high-quality"
+  },
+  {
+   "pattern": "clinically proven",
+   "soft": null
+  }
+ ],
+ "approved_claims": [
+  "rated 4.6/5 by 2,000 shoppers"
+ ],
+ "facts": [
+  {
+   "id": "F1",
+   "topic": "free shipping",
+   "topic_regex": "free\\s+shipping",
+   "approved": "499",
+   "statement": "Free shipping on orders above Rs 499"
+  },
+  {
+   "id": "F2",
+   "topic": "returns",
+   "topic_regex": "returns?\\b",
+   "approved": "7",
+   "statement": "7-day easy returns"
+  },
+  {
+   "id": "F3",
+   "topic": "Plus plan price",
+   "topic_regex": "plus\\s+plan",
+   "approved": "299",
+   "statement": "Plus plan costs Rs 299 per month"
+  }
+ ],
+ "safety": {
+  "threat_patterns": [
+   "\\bi\\s*(?:will|'ll|am going to|'m going to|gonna)\\s+(?:kill|hurt|beat|shoot|stab|destroy|murder)\\s+(?:you|u|him|her|them)\\b",
+   "\\b(?:kill|murder|shoot|stab|hurt)\\s+(?:you|u|him|her|them|yourself)\\b",
+   "\\bgo\\s+(?:die|kill\\s+yourself)\\b",
+   "\\bkys\\b",
+   "\\bi(?:'ll|\\s+will)\\s+find\\s+(?:you|u)\\b",
+   "\\byou(?:'re|\\s+are)\\s+going\\s+to\\s+(?:die|pay)\\b"
+  ],
+  "abuse_words": [
+   "idiot",
+   "stupid",
+   "moron",
+   "dumb",
+   "shut up",
+   "loser",
+   "useless"
+  ]
+ }
+}
