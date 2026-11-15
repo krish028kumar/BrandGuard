@@ -28,11 +28,13 @@ import urllib.request
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 DEFAULT_OPENROUTER_MODEL = "openrouter/free"
 
 MAX_TOKENS = 4000
-REQUEST_TIMEOUT = 25
+REQUEST_TIMEOUT = 45
 MAX_RETRIES = 1
 
 CATS = {
@@ -683,7 +685,7 @@ def run_ai_check(
         openrouter_api_key,
     )
 
-    if not openai_key and not router_key:
+    if not openai_key and not router_key and not _secret("GEMINI_API_KEY"):
 
         raise RuntimeError(
             "AI moderation is UNVERIFIED. "
@@ -698,6 +700,16 @@ def run_ai_check(
     )
 
     providers = []
+
+    # Gemini (free key from Google AI Studio) is tried first when configured.
+    gemini_key = _secret("GEMINI_API_KEY")
+    if gemini_key:
+        providers.append((
+            "Gemini",
+            gemini_key,
+            _secret("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
+            GEMINI_URL,
+        ))
 
     # OpenAI primary.
     if openai_key:

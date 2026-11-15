@@ -29,6 +29,17 @@ st.markdown(ui.CSS, unsafe_allow_html=True)
 st.markdown(
     """
     <style>
+    /* Streamlit dims "stale" elements while a click is processing. Disable that fade. */
+    [data-stale="true"],
+    [data-stale="true"] *,
+    .stApp [data-testid="stElementContainer"][data-stale],
+    .stApp[data-teststate="running"] [data-testid="stVerticalBlock"] > div {
+        opacity: 1 !important;
+        filter: none !important;
+        -webkit-filter: none !important;
+        transition: none !important;
+    }
+
     /* Main application must remain interactive. */
     [data-testid="stAppViewContainer"],
     [data-testid="stMain"],
@@ -274,7 +285,8 @@ def _setting(name, default=""):
 
 def api_key():
     return (
-        _setting("OPENAI_API_KEY")
+        _setting("GEMINI_API_KEY")
+        or _setting("OPENAI_API_KEY")
         or _setting("OPENROUTER_API_KEY")
     )
 
@@ -985,6 +997,8 @@ with T_review:
 
             else:
 
+                st.toast("Submitting your draft…", icon="⏳")
+
                 try:
 
                     data = load()
@@ -1325,6 +1339,8 @@ with T_image:
                 key="image_submit_button_" + str(r["rid"]),
                 disabled=image_already_submitted
             ):
+
+                st.toast("Submitting image review…", icon="⏳")
 
                 try:
 

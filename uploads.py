@@ -30,6 +30,7 @@ import urllib.request
 API_OPENAI = "https://api.openai.com/v1/chat/completions"
 API_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
 
+API_GEMINI = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
 DEFAULT_OPENAI_VISION_MODEL = "gpt-4.1-mini"
 DEFAULT_OPENROUTER_VISION_MODEL = "openrouter/free"
 
@@ -673,7 +674,7 @@ def vision_review(
         openrouter_api_key
     )
 
-    if not openai_key and not router_key:
+    if not openai_key and not router_key and not _secret("GEMINI_API_KEY"):
 
         raise ValueError(
             "Neither OPENAI_API_KEY nor OPENROUTER_API_KEY is configured."
@@ -701,6 +702,15 @@ def vision_review(
     ]
 
     providers = []
+
+    if _secret("GEMINI_API_KEY"):
+
+        providers.append((
+            "Gemini",
+            API_GEMINI,
+            _secret("GEMINI_API_KEY"),
+            _secret("GEMINI_MODEL", "gemini-2.5-flash")
+        ))
 
     if openai_key:
 
