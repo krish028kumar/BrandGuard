@@ -491,6 +491,49 @@ def seed():
     return added
 
 
+# ---------------- welcome: ask for a name first ----------------
+
+if not st.session_state.get("user_name"):
+
+    st.markdown(ui.hero(), unsafe_allow_html=True)
+
+    _l, _c, _r = st.columns([1, 2, 1])
+
+    with _c:
+
+        st.markdown("### 👋 Welcome to BrandGuard")
+
+        st.caption(
+            "Enter your name to get started. Your drafts and "
+            "submissions will appear under this name."
+        )
+
+        with st.form("welcome_form", clear_on_submit=False):
+
+            entered = st.text_input(
+                "Your name",
+                placeholder="e.g. Priya",
+                max_chars=40
+            )
+
+            go = st.form_submit_button(
+                "Continue →",
+                type="primary",
+                use_container_width=True
+            )
+
+        if go:
+
+            if entered.strip():
+                st.session_state["user_name"] = entered.strip()
+                st.rerun()
+
+            else:
+                st.warning("Please enter your name to continue.")
+
+    st.stop()
+
+
 # ---------------- sidebar ----------------
 
 with st.sidebar:
@@ -506,7 +549,7 @@ with st.sidebar:
 
     who = st.text_input(
         "Display name",
-        "Krish",
+        st.session_state["user_name"],
         key="display_name"
     )
 
@@ -515,10 +558,24 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
+    if not st.session_state.get("demo_seen"):
+        st.markdown(
+            "<style>@keyframes bgbounce{0%,100%{transform:translateY(0)}"
+            "50%{transform:translateY(7px)}}</style>"
+            "<div style='background:#F1EEFF;border:1px dashed #6C5CE7;"
+            "border-radius:12px;padding:8px 10px;font-size:.82rem;"
+            "color:#4C3FB5;font-weight:600;text-align:center;margin-bottom:4px'>"
+            "New here? Load sample data to explore "
+            "<span style='display:inline-block;font-size:1.2rem;"
+            "animation:bgbounce 1s ease-in-out infinite'>⬇️</span></div>",
+            unsafe_allow_html=True
+        )
+
     if st.button(
         "🎬 Demo data",
         use_container_width=True
     ):
+        st.session_state["demo_seen"] = True
         try:
             added = seed()
 
@@ -1513,6 +1570,12 @@ with T_queue:
             "log": []
         }
 
+    if role == "Creator":
+        st.caption(
+            "Creator view: you only see submissions made under "
+            "your display name. Reviewers see the full queue."
+        )
+
     if not d["items"]:
 
         st.markdown(
@@ -1526,6 +1589,9 @@ with T_queue:
         )
 
     for it in d["items"]:
+
+        if role == "Creator" and it.get("author") != who:
+            continue
 
         it.setdefault("versions", [])
         it.setdefault("comments", [])
