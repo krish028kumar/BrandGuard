@@ -1154,65 +1154,67 @@ with T_image:
             key="run_image_review"
         ):
 
-            data = img.getvalue()
+            st.toast("Image review started…", icon="🔎")
+            with st.spinner("🔎 Reviewing your image. The AI check can take up to ~30 seconds…"):
+                data = img.getvalue()
 
-            local = []
-            vf = []
-            extracted = ""
-            vstatus = "not_configured"
-            verr = ""
+                local = []
+                vf = []
+                extracted = ""
+                vstatus = "not_configured"
+                verr = ""
 
-            try:
+                try:
 
-                local = uploads.local_image_checks(
-                    data,
-                    alt,
-                    RB
-                )
+                    local = uploads.local_image_checks(
+                        data,
+                        alt,
+                        RB
+                    )
 
-                if has_key():
+                    if has_key():
 
-                    try:
+                        try:
 
-                        extracted, vf = uploads.vision_review(
-                            data,
-                            RB,
-                            api_key(),
-                            vision_model_name(),
-                            alt
-                        )
+                            extracted, vf = uploads.vision_review(
+                                data,
+                                RB,
+                                api_key(),
+                                vision_model_name(),
+                                alt
+                            )
 
-                        vstatus = "completed"
+                            vstatus = "completed"
 
-                    except Exception as e:
+                        except Exception as e:
 
-                        vstatus = "unverified"
-                        verr = str(e)
+                            vstatus = "unverified"
+                            verr = str(e)
 
-                tf = (
-                    review(extracted, RB)
-                    if extracted.strip()
-                    else []
-                )
+                    tf = (
+                        review(extracted, RB)
+                        if extracted.strip()
+                        else []
+                    )
 
-                st.session_state["img_res"] = {
-                    "rid": time.time_ns(),
-                    "sig": current_image_sig,
-                    "name": img.name,
-                    "alt": alt,
-                    "local": local,
-                    "vf": vf,
-                    "vstatus": vstatus,
-                    "verr": verr,
-                    "extracted": extracted,
-                    "tf": tf
-                }
+                    st.session_state["img_res"] = {
+                        "rid": time.time_ns(),
+                        "sig": current_image_sig,
+                        "name": img.name,
+                        "alt": alt,
+                        "local": local,
+                        "vf": vf,
+                        "vstatus": vstatus,
+                        "verr": verr,
+                        "extracted": extracted,
+                        "tf": tf
+                    }
 
-            except Exception as e:
+                except Exception as e:
 
-                st.error(
-                    "Could not review this image: %s" % e
-                )
+                    st.error(
+                        "Could not review this image: %s" % e
+                    )
 
     else:
 
@@ -1470,6 +1472,12 @@ with T_image:
 # ---------------- tab 3: approval queue ----------------
 
 with T_queue:
+
+    _flash = st.session_state.pop("queue_flash", None)
+
+    if _flash:
+        st.toast(_flash[0], icon=_flash[1])
+        st.success(_flash[0])
 
     if st.session_state.pop("celebrate", False):
 
@@ -1735,21 +1743,29 @@ with T_queue:
                             save(latest_data)
 
                             if status == "Approved":
-                                st.session_state["celebrate"] = True
-
-                            elif status == "Changes requested":
+                                st.balloons()
+                                party_poppers()
                                 st.toast(
-                                    "Changes requested successfully.",
-                                    icon="✏️"
+                                    "Approved! Ready to publish.",
+                                    icon="🎉"
+                                )
+                                st.success(
+                                    "🎉 Approved successfully! "
+                                    "The status chip updates on your next click."
                                 )
 
                             else:
-                                st.toast(
-                                    "Submission rejected.",
-                                    icon="⛔"
-                                )
-
-                            st.rerun()
+                                if status == "Changes requested":
+                                    st.session_state["queue_flash"] = (
+                                        "Changes requested successfully.",
+                                        "✏️"
+                                    )
+                                else:
+                                    st.session_state["queue_flash"] = (
+                                        "Submission rejected.",
+                                        "⛔"
+                                    )
+                                st.rerun()
 
                         except Exception as e:
 
@@ -1815,14 +1831,9 @@ with T_queue:
                                     None
                                 )
 
-                                st.toast(
+                                st.session_state["queue_flash"] = (
                                     "Submission deleted from the queue.",
-                                    icon="🗑️"
-                                )
-
-                                st.success(
-                                    "Submission and its revision history "
-                                    "were deleted successfully."
+                                    "🗑️"
                                 )
 
                             st.rerun()
