@@ -215,6 +215,22 @@ def load_cached():
     return load()
 
 
+def open_tab(label_text):
+    """Switch the page to the tab whose title contains label_text."""
+
+    try:
+      st.components.v1.html(
+        "<script>setTimeout(function(){"
+        "var t=window.parent.document.querySelectorAll('button[role=\"tab\"]');"
+        "for(var i=0;i<t.length;i++){"
+        "if(t[i].innerText.indexOf('LABEL')>-1){t[i].click();break;}}"
+        "},400);</script>".replace("LABEL", label_text),
+        height=0
+      )
+    except Exception:
+        pass
+
+
 def now():
     return time.strftime("%Y-%m-%d %H:%M")
 
@@ -579,15 +595,19 @@ with st.sidebar:
         try:
             added = seed()
 
-            if added:
-                st.success(
-                    f"Loaded {added} demo submission(s)."
-                )
-            else:
-                st.info(
-                    "Demo examples are already loaded. "
-                    "No duplicates were added."
-                )
+            _demo = "Messy launch post"
+
+            st.session_state["sample_choice"] = _demo
+            st.session_state["t_" + _demo] = _demo
+            st.session_state["x_" + _demo] = SAMPLES[_demo]
+
+            st.success(
+                "Demo data ready! A sample post is loaded in "
+                "'Review content'. Click 🚀 Run review to test it. "
+                "More samples are under 'Quick samples'."
+            )
+
+            open_tab("Review content")
 
         except Exception as e:
             st.error("Could not save demo data: %s" % e)
@@ -695,7 +715,8 @@ with T_review:
         sample = st.radio(
             "Quick samples",
             ["✏️ Write my own"] + list(SAMPLES),
-            horizontal=True
+            horizontal=True,
+            key="sample_choice"
         )
 
         title = st.text_input(
@@ -1590,7 +1611,7 @@ with T_queue:
 
     for it in d["items"]:
 
-        if role == "Creator" and it.get("author") != who:
+        if role == "Creator" and it.get("author") not in (who, "Demo creator"):
             continue
 
         it.setdefault("versions", [])
