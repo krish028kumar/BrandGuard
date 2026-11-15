@@ -16,7 +16,7 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 DEFAULT_OPENROUTER_MODEL = "openrouter/free"
-MAX_TOKENS = 4000
+MAX_TOKENS = 2000
 
 CATS = {"Safety", "Tone", "Claim", "Fact", "Terminology", "Accessibility"}
 SEVS = {"Critical", "High", "Medium", "Low"}
@@ -206,7 +206,7 @@ def _post(url, payload, api_key, provider):
         headers=headers,
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=75) as response:
+    with urllib.request.urlopen(request, timeout=25) as response:
         raw = response.read().decode("utf-8")
     try:
         return json.loads(raw)
@@ -263,7 +263,7 @@ def run_ai_check(
                 "temperature": 0.1,
             }
             last = None
-            for attempt in range(2):
+            for attempt in range(1):
                 try:
                     data = _post(url, payload, key, provider)
                     return parse(_message_text(data, provider), draft)
