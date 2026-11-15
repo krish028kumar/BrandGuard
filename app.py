@@ -155,6 +155,7 @@ with T_review:
         tkey = "x_" + sample
         up_doc = st.file_uploader("📎 Or upload a document (.txt, .docx, .pdf) and review its text",
                                   type=["txt", "docx", "pdf"], key="doc_up")
+        is_document = up_doc is not None
         if up_doc is not None:
             sig = (up_doc.name, up_doc.size)
             if st.session_state.get("doc_sig") != sig:
@@ -195,18 +196,26 @@ with T_review:
             if not text.strip():
                 st.warning("Add some text first.")
             else:
-                F0 = review(text, RB)
+               F0 = [] if is_document else review(text, RB)
                 ai_status = "rules_only"
                 ai_error = ""
                 with st.spinner("Running rulebook checks and multilingual AI moderation…" if use_ai else "Checking the local rulebook…"):
-                    if use_ai:
-                        try:
-                            ai_findings = run_ai_check(text, RB, api_key(), model_name())
-                            F0 = merge_findings(F0, ai_findings)
-                            ai_status = "completed"
-                        except Exception as e:
-                            ai_status = "unverified"
-                            ai_error = str(e)
+                    
+if use_ai:
+    try:
+        ai_findings = run_ai_check(
+            text,
+            RB,
+            api_key(),
+            model_name(),
+            brand_mode=not is_document
+        )
+        F0 = merge_findings(F0, ai_findings)
+        ai_status = "completed"
+    except Exception as e:
+        ai_status = "unverified"
+        ai_error = str(e)
+
                 st.session_state["res"] = (time.time_ns(), text, F0, title, ai_status, ai_error)
     with right:
         st.markdown(ui.panel("🧭 What gets checked",
