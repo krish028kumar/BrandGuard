@@ -1,4 +1,3 @@
-
 import json
 import os
 import time
@@ -199,6 +198,33 @@ def save(data):
 
 def now():
     return time.strftime("%Y-%m-%d %H:%M")
+
+
+POPPER_HTML = (
+    "<style>"
+    "@keyframes bgpop{0%{transform:translate(0,0) scale(.4);opacity:1}"
+    "100%{transform:translate(var(--x),var(--y)) scale(1.4) rotate(360deg);opacity:0}}"
+    ".bgpop{position:fixed;bottom:12vh;font-size:2rem;pointer-events:none;"
+    "z-index:99999;opacity:0;animation:bgpop 1.6s ease-out forwards}"
+    "</style>"
+)
+_POP_ITEMS = [
+    ("🎉", "-35vw", "-55vh", "left:50%"), ("🎊", "35vw", "-60vh", "left:50%"),
+    ("🎉", "-20vw", "-70vh", "left:50%"), ("🎊", "20vw", "-65vh", "left:50%"),
+    ("✨", "-45vw", "-45vh", "left:50%"), ("✨", "45vw", "-50vh", "left:50%"),
+    ("🎉", "-5vw", "-75vh", "left:50%"), ("🎊", "8vw", "-72vh", "left:50%"),
+]
+
+
+def party_poppers():
+    """Confetti burst (CSS only). Pure string concat: no % formatting."""
+    parts = [POPPER_HTML]
+    for emoji, x, y, pos in _POP_ITEMS:
+        parts.append(
+            '<span class="bgpop" style="' + pos + ';--x:' + x + ';--y:' + y + '">'
+            + emoji + "</span>"
+        )
+    st.markdown("".join(parts), unsafe_allow_html=True)
 
 
 def new_id():
@@ -723,38 +749,40 @@ with T_review:
 
             else:
 
-                findings = (
-                    []
-                    if is_document
-                    else review(text, RB)
-                )
+                st.toast("Review started…", icon="🔍")
+                with st.spinner("🔍 Reviewing your content. The AI check can take up to ~30 seconds…"):
+                    findings = (
+                        []
+                        if is_document
+                        else review(text, RB)
+                    )
 
-                ai_status = "rules_only"
-                ai_error = ""
+                    ai_status = "rules_only"
+                    ai_error = ""
 
-                if use_ai:
+                    if use_ai:
 
-                    try:
+                        try:
 
-                        ai_findings = run_ai_check(
-                            text,
-                            RB,
-                            api_key(),
-                            model_name(),
-                            brand_mode=not is_document
-                        )
+                            ai_findings = run_ai_check(
+                                text,
+                                RB,
+                                api_key(),
+                                model_name(),
+                                brand_mode=not is_document
+                            )
 
-                        findings = merge_findings(
-                            findings,
-                            ai_findings
-                        )
+                            findings = merge_findings(
+                                findings,
+                                ai_findings
+                            )
 
-                        ai_status = "completed"
+                            ai_status = "completed"
 
-                    except Exception as e:
+                        except Exception as e:
 
-                        ai_status = "unverified"
-                        ai_error = str(e)
+                            ai_status = "unverified"
+                            ai_error = str(e)
 
                 draft_id = get_draft_id(title, who)
 
@@ -1039,6 +1067,8 @@ with T_review:
                             )
 
                         st.balloons()
+
+                        party_poppers()
 
                         st.toast(
                             "Submitted as version %d. Open the Approval queue."
@@ -1380,6 +1410,8 @@ with T_image:
 
                         st.balloons()
 
+                        party_poppers()
+
                         st.toast(
                             "Image submitted. Open the Approval queue.",
                             icon="📤"
@@ -1426,6 +1458,8 @@ with T_queue:
     if st.session_state.pop("celebrate", False):
 
         st.balloons()
+
+        party_poppers()
 
         st.toast(
             "Approved! Ready to publish.",

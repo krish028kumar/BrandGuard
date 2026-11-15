@@ -1,4 +1,3 @@
-
 """AI-assisted multilingual moderation and brand review.
 
 Primary provider: OpenAI.
@@ -33,8 +32,8 @@ DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 DEFAULT_OPENROUTER_MODEL = "openrouter/free"
 
 MAX_TOKENS = 4000
-REQUEST_TIMEOUT = 60
-MAX_RETRIES = 2
+REQUEST_TIMEOUT = 25
+MAX_RETRIES = 1
 
 CATS = {
     "Safety",
