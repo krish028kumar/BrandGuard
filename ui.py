@@ -9,6 +9,7 @@ Contains:
 - Finding cards
 - Highlighted draft rendering
 - Approval status badges
+- Workflow success and notification components
 
 No Streamlit import.
 """
@@ -47,9 +48,7 @@ DEFAULT_SEVERITY = "Low"
 # ---------------- safe HTML helpers ----------------
 
 def E(value):
-    """
-    Escape untrusted values before inserting them into HTML.
-    """
+    """Escape untrusted values before inserting them into HTML."""
 
     return html.escape(
         str(value if value is not None else ""),
@@ -58,9 +57,7 @@ def E(value):
 
 
 def _severity(value):
-    """
-    Return a supported severity.
-    """
+    """Return a supported severity."""
 
     value = str(value or DEFAULT_SEVERITY)
 
@@ -71,9 +68,7 @@ def _severity(value):
 
 
 def _category(value):
-    """
-    Return a supported category.
-    """
+    """Return a supported category."""
 
     value = str(value or "Safety")
 
@@ -118,6 +113,43 @@ html, body, .stApp, button, input, textarea {
 [data-testid="stSidebar"] {
     background: #FFFFFF;
     border-right: 1px solid #ECE9FF;
+}
+
+
+/* ---------------- remove blur and washed-out loading effects ---------------- */
+
+.stApp,
+[data-testid="stApp"],
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewBlockContainer"],
+[data-testid="stMain"],
+[data-testid="stMainBlockContainer"] {
+    filter: none !important;
+    -webkit-filter: none !important;
+    opacity: 1 !important;
+}
+
+/* Keep the main application clear during reruns */
+
+[data-testid="stAppViewContainer"] [data-testid="stAppViewBlockContainer"] {
+    filter: none !important;
+    -webkit-filter: none !important;
+    opacity: 1 !important;
+}
+
+/* Remove unwanted translucent overlays */
+
+[data-testid="stAppViewContainer"]::before,
+[data-testid="stAppViewContainer"]::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Keep normal content readable */
+
+[data-testid="stMain"] {
+    filter: none !important;
+    opacity: 1 !important;
 }
 
 
@@ -168,6 +200,45 @@ html, body, .stApp, button, input, textarea {
 
     100% {
         background-position: 200% 0;
+    }
+}
+
+@keyframes successPop {
+    0% {
+        transform: scale(.85);
+        opacity: 0;
+    }
+
+    65% {
+        transform: scale(1.04);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes successGlow {
+    0%, 100% {
+        box-shadow: 0 8px 24px rgba(32, 201, 151, .10);
+    }
+
+    50% {
+        box-shadow: 0 12px 32px rgba(32, 201, 151, .24);
+    }
+}
+
+@keyframes revisionSlide {
+    from {
+        opacity: 0;
+        transform: translateX(-12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
     }
 }
 
@@ -335,13 +406,18 @@ html, body, .stApp, button, input, textarea {
     border-radius: 12px;
     font-weight: 700;
     border: 1px solid #D9D4FF;
-    transition: all .2s;
+    transition: background .2s ease, border-color .2s ease,
+                box-shadow .2s ease, transform .2s ease;
 }
 
 .stButton > button:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 18px rgba(108,92,231,.25);
     border-color: #6C5CE7;
+}
+
+.stButton > button:active {
+    transform: scale(.98);
 }
 
 .stButton > button[kind="primary"],
@@ -359,6 +435,119 @@ html, body, .stApp, button, input, textarea {
 .stTextArea textarea,
 .stTextInput input {
     border-radius: 12px;
+}
+
+
+/* ---------------- workflow feedback ---------------- */
+
+.workflow-success {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    background: linear-gradient(
+        120deg,
+        #E6FCF5,
+        #D3F9D8
+    );
+
+    border: 1px solid #8CE99A;
+    border-radius: 18px;
+    padding: 17px 20px;
+    margin: 12px 0;
+
+    color: #087F5B;
+    animation: successPop .45s ease both,
+               successGlow 2s ease-in-out 2;
+}
+
+.workflow-success .feedback-icon {
+    font-size: 2.2rem;
+    flex-shrink: 0;
+}
+
+.workflow-success .feedback-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.workflow-success .feedback-message {
+    font-size: .88rem;
+    margin-top: 3px;
+    color: #087F5B;
+}
+
+.workflow-revision {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    background: linear-gradient(
+        120deg,
+        #FFF4E6,
+        #FFF0DB
+    );
+
+    border: 1px solid #FFC078;
+    border-left: 6px solid #F08C00;
+    border-radius: 18px;
+    padding: 17px 20px;
+    margin: 12px 0;
+
+    color: #A65300;
+    animation: revisionSlide .45s ease both;
+}
+
+.workflow-revision .feedback-icon {
+    font-size: 2.2rem;
+    flex-shrink: 0;
+}
+
+.workflow-revision .feedback-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.workflow-revision .feedback-message {
+    font-size: .88rem;
+    margin-top: 3px;
+    color: #A65300;
+}
+
+.workflow-submitted {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    background: linear-gradient(
+        120deg,
+        #F3F0FF,
+        #E7E5FF
+    );
+
+    border: 1px solid #B197FC;
+    border-radius: 18px;
+    padding: 17px 20px;
+    margin: 12px 0;
+
+    color: #5F3DC4;
+    animation: successPop .45s ease both;
+}
+
+.workflow-submitted .feedback-icon {
+    font-size: 2.2rem;
+    flex-shrink: 0;
+}
+
+.workflow-submitted .feedback-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.workflow-submitted .feedback-message {
+    font-size: .88rem;
+    margin-top: 3px;
+    color: #5F3DC4;
 }
 
 
@@ -742,6 +931,12 @@ mark.hl-low {
     .score {
         flex-wrap: wrap;
     }
+
+    .workflow-success,
+    .workflow-revision,
+    .workflow-submitted {
+        padding: 14px;
+    }
 }
 
 </style>
@@ -784,7 +979,6 @@ def score_of(F):
         and _severity(f.get("severity")) == "Critical"
         for f in F
     ):
-
         return min(score, 8)
 
     if any(
@@ -792,7 +986,6 @@ def score_of(F):
         and _category(f.get("category")) == "Safety"
         for f in F
     ):
-
         return min(score, 40)
 
     return score
@@ -803,7 +996,6 @@ def score_of(F):
 def mood(s):
 
     if s >= 90:
-
         return (
             "😄",
             "Looking great",
@@ -811,7 +1003,6 @@ def mood(s):
         )
 
     if s >= 70:
-
         return (
             "🙂",
             "Almost there",
@@ -819,7 +1010,6 @@ def mood(s):
         )
 
     if s >= 45:
-
         return (
             "😟",
             "Needs work",
@@ -925,6 +1115,9 @@ def steps():
 
 def score_card(F):
 
+    if not isinstance(F, (list, tuple)):
+        F = []
+
     s = score_of(F)
 
     face, head, sub = mood(s)
@@ -934,7 +1127,6 @@ def score_card(F):
         and _severity(f.get("severity")) == "Critical"
         for f in F
     ):
-
         face = "🚫"
         head = "Blocked: unsafe content"
         sub = (
@@ -973,7 +1165,6 @@ def score_card(F):
     )
 
     if not chips:
-
         chips = (
             '<span class="chip ok">'
             '✔ No issues found'
@@ -1285,6 +1476,53 @@ def status_chip(status):
             icon,
             E(status)
         )
+    )
+
+
+# ---------------- workflow feedback components ----------------
+
+def submission_success(message="Your submission has been sent for review."):
+    """Creator submission confirmation."""
+
+    return (
+        '<div class="workflow-submitted">'
+        '<span class="feedback-icon">🎉</span>'
+        '<div>'
+        '<div class="feedback-title">Submission sent successfully!</div>'
+        '<div class="feedback-message">%s</div>'
+        '</div>'
+        '</div>'
+        % E(message)
+    )
+
+
+def approval_success(message="The content has been approved successfully."):
+    """Reviewer approval confirmation."""
+
+    return (
+        '<div class="workflow-success">'
+        '<span class="feedback-icon">🎊</span>'
+        '<div>'
+        '<div class="feedback-title">Approved successfully!</div>'
+        '<div class="feedback-message">%s</div>'
+        '</div>'
+        '</div>'
+        % E(message)
+    )
+
+
+def revision_requested(message="The creator can now review the feedback and make changes."):
+    """Reviewer Request Changes confirmation."""
+
+    return (
+        '<div class="workflow-revision">'
+        '<span class="feedback-icon">📝</span>'
+        '<div>'
+        '<div class="feedback-title">Changes requested</div>'
+        '<div class="feedback-message">%s</div>'
+        '</div>'
+        '</div>'
+        % E(message)
     )
 
 
