@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # BrandGuard (Team Binary Brains, Round 2)
 
 Pre-publication brand check. Paste a draft, get findings that cite the approved rule or fact, see a suggested rewrite (never auto-applied), and send it through a reviewer approval flow with comments and version history.
@@ -22,3 +23,7 @@ Pre-publication brand check. Paste a draft, get findings that cite the approved 
 
 ## Not built yet (planned for Round 3)
 Image review (logo, palette, contrast), document import (PDF/DOCX), richer insights.
+=======
+# BrandGuard
+AI-powered BrandGuard platform for detecting harmful, threatening, abusive, and unsafe brand-related content using AI and moderation rules.
+>>>>>>> 86d677343cd82d24739dfe6d0f617a002bc2000c
