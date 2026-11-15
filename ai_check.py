@@ -3,15 +3,25 @@
 
 Primary provider: OpenAI.
 Fallback provider: OpenRouter.
-Fail-closed: raises if neither provider completes a valid review.
+
+Fail-closed:
+- Never treats API errors as Safe.
+- Never treats malformed JSON as Safe.
+- Never accepts invalid findings.
+- Never silently ignores unlocatable findings.
+- Raises UNVERIFIED if neither provider completes a valid review.
 """
 
 import json
 import os
 import re
-import time
 import urllib.error
 import urllib.request
+
+
+# --------------------------------------------------
+# API CONFIGURATION
+# --------------------------------------------------
 
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -20,6 +30,7 @@ DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 DEFAULT_OPENROUTER_MODEL = "openrouter/free"
 
 MAX_TOKENS = 2000
+REQUEST_TIMEOUT = 40
 
 CATS = {
     "Safety",
@@ -33,14 +44,21 @@ CATS = {
 SEVS = {"Critical", "High", "Medium", "Low"}
 
 
+# --------------------------------------------------
+# SECRET MANAGEMENT
+# --------------------------------------------------
+
 def _secret(name, default=""):
     """Read Streamlit Secrets first, then environment variables."""
+
     try:
         import streamlit as st
 
         value = st.secrets.get(name, default)
+
         if value:
             return str(value)
+
     except Exception:
         pass
 
@@ -52,7 +70,8 @@ def _resolve_credentials(
     openai_api_key=None,
     openrouter_api_key=None,
 ):
-    """Resolve provider keys while supporting the older app.py arguments."""
+    """Resolve provider keys with backward compatibility."""
+
     openai_key = (
         openai_api_key
         or _secret("OPENAI_API_KEY")
@@ -67,10 +86,15 @@ def _resolve_credentials(
     return openai_key, router_key
 
 
+# --------------------------------------------------
+# PROMPT GENERATION
+# --------------------------------------------------
+
 def build_prompt(draft, rb, brand_mode=True):
-    """Build the moderation prompt for marketing or educational content."""
+    """Build moderation prompt for brand or educational content."""
 
     if brand_mode:
+
         rulebook_text = json.dumps(
             rb or {},
             ensure_ascii=False,
@@ -92,6 +116,7 @@ def build_prompt(draft, rb, brand_mode=True):
         )
 
     else:
+
         rulebook_text = "{}"
 
         task_two = (
@@ -170,8 +195,12 @@ def build_prompt(draft, rb, brand_mode=True):
     )
 
 
+# --------------------------------------------------
+# API RESPONSE EXTRACTION
+# --------------------------------------------------
+
 def _message_text(data, provider):
-    """Extract the response text from a chat-completion response."""
+    """Extract response text from a chat-completion response."""
 
     if not isinstance(data, dict):
         raise RuntimeError(
@@ -179,12 +208,15 @@ def _message_text(data, provider):
         )
 
     if data.get("error"):
+
         err = data["error"]
+
         message = (
             err.get("message")
             if isinstance(err, dict)
             else str(err)
         )
+
         raise RuntimeError(
             "%s error: %s" % (provider, message)
         )
@@ -200,16 +232,15 @@ def _message_text(data, provider):
 
     if first.get("error"):
         raise RuntimeError(
-            "%s provider error: %s" % (
-                provider,
-                first["error"],
-            )
+            "%s provider error: %s"
+            % (provider, first["error"])
         )
 
     msg = first.get("message") or {}
     content = msg.get("content")
 
     if isinstance(content, list):
+
         content = "".join(
             part.get("text", "")
             for part in content
@@ -220,7 +251,8 @@ def _message_text(data, provider):
         return content
 
     raise RuntimeError(
-        "%s returned no answer text (finish_reason=%s, refusal=%s)."
+        "%s returned no answer text "
+        "(finish_reason=%s, refusal=%s)."
         % (
             provider,
             first.get("finish_reason"),
@@ -229,11 +261,17 @@ def _message_text(data, provider):
     )
 
 
+# --------------------------------------------------
+# JSON VALIDATION
+# --------------------------------------------------
+
 def _extract_json_array(out):
-    """Extract and validate the JSON array returned by the model."""
+    """Extract and validate AI JSON findings."""
 
     if not isinstance(out, str) or not out.strip():
-        raise ValueError("AI returned an empty response.")
+        raise ValueError(
+            "AI returned an empty response."
+        )
 
     cleaned = re.sub(
         r"^\s*```(?:json)?\s*|\s*```\s*$",
@@ -243,10 +281,16 @@ def _extract_json_array(out):
     )
 
     try:
+
         items = json.loads(cleaned)
 
     except json.JSONDecodeError:
-        match = re.search(r"\[.*\]", cleaned, re.DOTALL)
+
+        match = re.search(
+            r"\[.*\]",
+            cleaned,
+            re.DOTALL,
+        )
 
         if not match:
             raise ValueError(
@@ -254,14 +298,17 @@ def _extract_json_array(out):
             )
 
         try:
+
             items = json.loads(match.group(0))
 
         except json.JSONDecodeError as exc:
+
             raise ValueError(
                 "AI returned invalid JSON; review is unverified."
             ) from exc
 
     if isinstance(items, dict):
+
         if isinstance(items.get("findings"), list):
             items = items["findings"]
 
@@ -276,10 +323,37 @@ def _extract_json_array(out):
     return items
 
 
+# --------------------------------------------------
+# FIND EXACT TEXT
+# --------------------------------------------------
+
+def _find_phrase(draft, phrase):
+    """Find exact text, then case-insensitive text."""
+
+    index = draft.find(phrase)
+
+    if index >= 0:
+        return index
+
+    index = draft.casefold().find(
+        phrase.casefold()
+    )
+
+    if index >= 0:
+        return index
+
+    return -1
+
+
+# --------------------------------------------------
+# PARSE AI FINDINGS
+# --------------------------------------------------
+
 def parse(out, draft, brand_mode=True):
-    """Convert AI JSON findings into the format expected by engine.py."""
+    """Convert AI findings into engine.py compatible format."""
 
     items = _extract_json_array(out)
+
     results = []
 
     for number, item in enumerate(items, start=1):
@@ -306,7 +380,7 @@ def parse(out, draft, brand_mode=True):
 
         if not brand_mode and category != "Safety":
             raise ValueError(
-                "Educational document review returned a non-safety finding."
+                "Educational review returned a non-safety finding."
             )
 
         if severity not in SEVS:
@@ -314,31 +388,30 @@ def parse(out, draft, brand_mode=True):
                 "AI finding %d has an invalid severity." % number
             )
 
-        index = draft.find(phrase)
+        index = _find_phrase(draft, phrase)
 
+        # Never silently accept a finding that cannot be located.
         if index < 0:
-            index = draft.casefold().find(phrase.casefold())
+            raise ValueError(
+                "AI finding %d quoted text that could not be located. "
+                "Review is UNVERIFIED." % number
+            )
+
+        start = index
+        end = index + len(phrase)
 
         why = str(
             item.get("why") or "Flagged by AI review."
         )
 
-        if index < 0:
-            start = 0
-            end = len(draft)
-
-            why += (
-                " (Quoted phrase could not be located; "
-                "the whole draft is highlighted.)"
-            )
-
-        else:
-            start = index
-            end = index + len(phrase)
+        suggestion = str(
+            item.get("suggestion") or "Review manually"
+        )
 
         replacement = item.get("replacement")
 
         if isinstance(replacement, str):
+
             replacement = replacement.strip()
 
             if (
@@ -346,6 +419,7 @@ def parse(out, draft, brand_mode=True):
                 or replacement.casefold() == phrase.strip().casefold()
             ):
                 replacement = None
+
         else:
             replacement = None
 
@@ -358,9 +432,7 @@ def parse(out, draft, brand_mode=True):
             "text": draft[start:end],
             "why": why,
             "source": "AI review (OpenAI/OpenRouter)",
-            "suggestion": str(
-                item.get("suggestion") or "Review manually"
-            ),
+            "suggestion": suggestion,
             "replacement": replacement,
             "confidence": "AI-assisted: a human must confirm",
         })
@@ -368,8 +440,12 @@ def parse(out, draft, brand_mode=True):
     return results
 
 
+# --------------------------------------------------
+# PROVIDER REQUEST
+# --------------------------------------------------
+
 def _post(url, payload, api_key, provider):
-    """Send a chat-completion request to a provider."""
+    """Send a chat-completion request."""
 
     headers = {
         "Authorization": "Bearer " + api_key,
@@ -377,6 +453,7 @@ def _post(url, payload, api_key, provider):
     }
 
     if provider == "OpenRouter":
+
         headers["X-OpenRouter-Title"] = "BrandGuard"
 
     request = urllib.request.Request(
@@ -386,17 +463,27 @@ def _post(url, payload, api_key, provider):
         method="POST",
     )
 
-    with urllib.request.urlopen(request, timeout=25) as response:
+    with urllib.request.urlopen(
+        request,
+        timeout=REQUEST_TIMEOUT,
+    ) as response:
+
         raw = response.read().decode("utf-8")
 
     try:
+
         return json.loads(raw)
 
     except json.JSONDecodeError as exc:
+
         raise RuntimeError(
             "%s returned invalid JSON." % provider
         ) from exc
 
+
+# --------------------------------------------------
+# MAIN AI MODERATION FUNCTION
+# --------------------------------------------------
 
 def run_ai_check(
     draft,
@@ -410,20 +497,25 @@ def run_ai_check(
     brand_mode=True,
 ):
     """
-    Return AI findings.
+    Run AI moderation.
 
-    Raises an exception if neither configured provider completes a valid
-    review.
+    Provider order:
+        1. OpenAI
+        2. OpenRouter
+
+    Raises RuntimeError with UNVERIFIED if neither provider
+    completes a valid review.
 
     Backward compatibility:
-    The api_key argument is treated as the old OpenRouter key.
-
-    Keys can also be read directly from Streamlit Secrets.
+        api_key is treated as the old OpenRouter key.
     """
 
     if not isinstance(draft, str) or not draft.strip():
-        raise ValueError("Draft text is empty.")
+        raise ValueError(
+            "Draft text is empty."
+        )
 
+    # Resolve API keys.
     openai_key, router_key = _resolve_credentials(
         api_key,
         openai_api_key,
@@ -431,7 +523,8 @@ def run_ai_check(
     )
 
     if not openai_key and not router_key:
-        raise ValueError(
+        raise RuntimeError(
+            "AI moderation is UNVERIFIED. "
             "Neither OPENAI_API_KEY nor OPENROUTER_API_KEY is configured."
         )
 
@@ -442,9 +535,12 @@ def run_ai_check(
     )
 
     failures = []
+
     providers = []
 
+    # OpenAI primary.
     if openai_key:
+
         providers.append((
             "OpenAI",
             openai_key,
@@ -452,9 +548,12 @@ def run_ai_check(
                 "OPENAI_MODEL",
                 DEFAULT_OPENAI_MODEL,
             ),
+            OPENAI_URL,
         ))
 
+    # OpenRouter fallback.
     if router_key:
+
         providers.append((
             "OpenRouter",
             router_key,
@@ -462,16 +561,13 @@ def run_ai_check(
                 "OPENROUTER_MODEL",
                 DEFAULT_OPENROUTER_MODEL,
             ),
+            OPENROUTER_URL,
         ))
 
-    for provider, key, mdl in providers:
+    # Try each configured provider.
+    for provider, key, mdl, url in providers:
 
         try:
-            url = (
-                OPENAI_URL
-                if provider == "OpenAI"
-                else OPENROUTER_URL
-            )
 
             payload = {
                 "model": mdl,
@@ -486,6 +582,7 @@ def run_ai_check(
             }
 
             try:
+
                 data = _post(
                     url,
                     payload,
@@ -498,13 +595,18 @@ def run_ai_check(
                     provider,
                 )
 
-                return parse(
+                # A provider is successful only if parsing
+                # and validation also complete successfully.
+                findings = parse(
                     response_text,
                     draft,
                     brand_mode=brand_mode,
                 )
 
+                return findings
+
             except urllib.error.HTTPError as exc:
+
                 body = exc.read().decode(
                     "utf-8",
                     errors="replace",
@@ -516,14 +618,19 @@ def run_ai_check(
                 ) from exc
 
             except urllib.error.URLError as exc:
+
                 raise RuntimeError(
                     "%s connection error: %s"
                     % (provider, exc.reason)
                 ) from exc
 
         except Exception as exc:
-            failures.append(str(exc))
 
+            failures.append(
+                "%s: %s" % (provider, str(exc))
+            )
+
+    # Neither provider completed a valid review.
     raise RuntimeError(
         "AI moderation did not complete. UNVERIFIED. "
         + " | ".join(failures)

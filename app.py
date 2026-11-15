@@ -29,11 +29,25 @@ RB = load_rulebook()
 
 
 SAMPLES = {
-    "Messy launch post": "BrightKart is the BEST store in India!!! Our users get 100% guaranteed delivery. Free shipping on orders above Rs 399, and 30-day returns. Click here to shop now, hurry!",
-    "Plan price post": "Our new Plus plan is just Rs 399 per month. Amazing deals for customers who love cheap prices.",
-    "Image post": "Meet our summer range ![](summer.png) Fastest delivery in the city.",
-    "Clean post": "Free shipping on orders above Rs 499. Easy 7-day returns. Shop the spring offer today.",
+    "Messy launch post": (
+        "BrightKart is the BEST store in India!!! Our users get "
+        "100% guaranteed delivery. Free shipping on orders above "
+        "Rs 399, and 30-day returns. Click here to shop now, hurry!"
+    ),
+    "Plan price post": (
+        "Our new Plus plan is just Rs 399 per month. Amazing deals "
+        "for customers who love cheap prices."
+    ),
+    "Image post": (
+        "Meet our summer range ![](summer.png) "
+        "Fastest delivery in the city."
+    ),
+    "Clean post": (
+        "Free shipping on orders above Rs 499. "
+        "Easy 7-day returns. Shop the spring offer today."
+    ),
 }
+
 
 ROLE_ICON = {
     "Creator": "✍️",
@@ -46,23 +60,69 @@ ROLE_ICON = {
 # ---------------- shared database storage ----------------
 
 def load():
+    """
+    Load shared data from the database.
+
+    Do not silently replace invalid database data with an empty
+    database. Doing that could cause existing submissions to be lost.
+    """
+
     data = database.load_data()
 
     if not isinstance(data, dict):
-        data = {"items": [], "log": []}
+        raise RuntimeError(
+            "BrandGuard could not load valid database data. "
+            "Your existing data has not been reset. "
+            "Check the Turso database connection."
+        )
 
-    data.setdefault("items", [])
-    data.setdefault("log", [])
+    if "items" not in data:
+        data["items"] = []
+
+    if "log" not in data:
+        data["log"] = []
+
+    if not isinstance(data["items"], list):
+        raise RuntimeError(
+            "Invalid submissions data returned by the database. "
+            "No data was changed."
+        )
+
+    if not isinstance(data["log"], list):
+        raise RuntimeError(
+            "Invalid insights data returned by the database. "
+            "No data was changed."
+        )
 
     return data
 
 
 def save(d):
+    """
+    Save shared data.
+
+    Database errors are deliberately allowed to propagate so the
+    application does not report a successful save when it failed.
+    """
+
+    if not isinstance(d, dict):
+        raise ValueError("Invalid database data.")
+
+    if not isinstance(d.get("items"), list):
+        raise ValueError("Invalid submissions data.")
+
+    if not isinstance(d.get("log"), list):
+        raise ValueError("Invalid insights data.")
+
     database.save_data(d)
 
 
 def now():
     return time.strftime("%Y-%m-%d %H:%M")
+
+
+def new_id():
+    return uuid.uuid4().hex
 
 
 # ---------------- API settings ----------------
@@ -92,11 +152,76 @@ def has_key():
 
 
 def model_name():
-    return _setting("OPENROUTER_MODEL", "openrouter/free")
+    return _setting(
+        "OPENROUTER_MODEL",
+        "openrouter/free"
+    )
 
 
 def vision_model_name():
-    return _setting("OPENROUTER_VISION_MODEL", "") or model_name()
+    return (
+        _setting("OPENROUTER_VISION_MODEL", "")
+        or model_name()
+    )
+
+
+# ---------------- submission helpers ----------------
+
+def get_draft_id(title):
+    """
+    Keep a stable identity for a draft title during the session.
+    Different creators with the same title will not overwrite
+    each other's submissions.
+    """
+
+    if "draft_ids" not in st.session_state:
+        st.session_state["draft_ids"] = {}
+
+    key = str(title).strip()
+
+    if key not in st.session_state["draft_ids"]:
+        st.session_state["draft_ids"][key] = new_id()
+
+    return st.session_state["draft_ids"][key]
+
+
+def find_submission(data, draft_id, title, author):
+    """
+    Find a submission by its permanent ID.
+
+    The title-and-author fallback supports older records created
+    before draft IDs were added.
+    """
+
+    for item in data["items"]:
+        if item.get("draft_id") == draft_id:
+            return item
+
+    for item in data["items"]:
+        if (
+            not item.get("draft_id")
+            and item.get("title") == title
+            and item.get("author") == author
+        ):
+            item["draft_id"] = draft_id
+            return item
+
+    return None
+
+
+def latest_ai_status(item):
+    versions = item.get("versions", [])
+
+    if not versions:
+        return "legacy / unknown"
+
+    return str(
+        versions[-1].get("ai_review", "legacy / unknown")
+    ).lower()
+
+
+def is_ai_unverified(item):
+    return latest_ai_status(item) == "unverified"
 
 
 # ---------------- demo data ----------------
@@ -105,7 +230,11 @@ def seed():
     """Add missing demo examples without duplicating existing records."""
 
     d = load()
-    existing = {i.get("title") for i in d["items"]}
+
+    existing = {
+        i.get("title")
+        for i in d["items"]
+    }
 
     plan = [
         ("Messy launch post", "Pending review"),
@@ -131,7 +260,10 @@ def seed():
             d["log"].append({
                 "rule": finding["rule"],
                 "category": finding["category"],
-                "dismissed": finding["rule"] in ("TN1", "TN4") and k % 2 == 0,
+                "dismissed": (
+                    finding["rule"] in ("TN1", "TN4")
+                    and k % 2 == 0
+                ),
                 "time": now()
             })
 
@@ -161,6 +293,7 @@ def seed():
 
         d["items"].append({
             "id": uuid.uuid4().hex[:6],
+            "draft_id": new_id(),
             "title": demo_title,
             "author": "Demo creator",
             "status": status,
@@ -171,14 +304,16 @@ def seed():
                     "text": t,
                     "time": now(),
                     "issues": len(findings),
-                    "by": "Demo creator"
+                    "by": "Demo creator",
+                    "ai_review": "demo / not run"
                 },
                 {
                     "v": 2,
                     "text": fixed,
                     "time": now(),
                     "issues": len(review(fixed, RB)),
-                    "by": "Demo creator"
+                    "by": "Demo creator",
+                    "ai_review": "demo / not run"
                 }
             ]
         })
@@ -186,7 +321,8 @@ def seed():
         existing.add(demo_title)
         added += 1
 
-    save(d)
+    if added:
+        save(d)
 
     return added
 
@@ -196,6 +332,7 @@ def seed():
 with st.sidebar:
 
     st.markdown("## 🛡️ BrandGuard")
+
     st.caption("Automation suggests. Humans decide.")
 
     role = st.selectbox(
@@ -215,24 +352,44 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-    if st.button("🎬 Demo data", use_container_width=True):
+    if st.button(
+        "🎬 Demo data",
+        use_container_width=True
+    ):
 
-        added = seed()
+        try:
+            added = seed()
 
-        if added:
-            st.success(f"Loaded {added} demo submission(s).")
-        else:
-            st.info("Demo examples are already loaded. No duplicates were added.")
+            if added:
+                st.success(
+                    f"Loaded {added} demo submission(s)."
+                )
+            else:
+                st.info(
+                    "Demo examples are already loaded. "
+                    "No duplicates were added."
+                )
 
-        st.rerun()
+            st.rerun()
+
+        except Exception as e:
+            st.error(
+                "Could not save demo data: %s" % e
+            )
 
     if role == "Admin":
 
         st.markdown("**🛠️ Admin controls**")
 
-        if not st.session_state.get("reset_pending", False):
+        if not st.session_state.get(
+            "reset_pending",
+            False
+        ):
 
-            if st.button("🧹 Reset all data", use_container_width=True):
+            if st.button(
+                "🧹 Reset all data",
+                use_container_width=True
+            ):
 
                 st.session_state["reset_pending"] = True
                 st.rerun()
@@ -240,22 +397,40 @@ with st.sidebar:
         else:
 
             st.warning(
-                "This clears submissions, comments and insights for everyone using BrandGuard."
+                "This clears submissions, comments and insights "
+                "for everyone using BrandGuard."
             )
 
             confirm_col, cancel_col = st.columns(2)
 
-            if confirm_col.button("Confirm reset", type="primary"):
+            if confirm_col.button(
+                "Confirm reset",
+                type="primary"
+            ):
 
-                save({"items": [], "log": []})
+                try:
 
-                st.session_state.pop("res", None)
-                st.session_state.pop("img_res", None)
-                st.session_state.pop("celebrate", None)
+                    save({
+                        "items": [],
+                        "log": []
+                    })
 
-                st.session_state["reset_pending"] = False
+                    st.session_state.pop("res", None)
+                    st.session_state.pop("img_res", None)
+                    st.session_state.pop("celebrate", None)
+                    st.session_state.pop("draft_ids", None)
 
-                st.rerun()
+                    st.session_state["reset_pending"] = False
+
+                    st.success("All data was reset.")
+
+                    st.rerun()
+
+                except Exception as e:
+
+                    st.error(
+                        "Reset failed. Database error: %s" % e
+                    )
 
             if cancel_col.button("Cancel"):
 
@@ -265,15 +440,20 @@ with st.sidebar:
     else:
 
         st.caption(
-            "Reset is available to Admin only. Switch the role above to test it."
+            "Reset is available to Admin only. "
+            "Switch the role above to test it."
         )
 
-    st.markdown(ui.privacy_card(), unsafe_allow_html=True)
+    st.markdown(
+        ui.privacy_card(),
+        unsafe_allow_html=True
+    )
 
     st.caption("Sample brand: " + RB["company"])
 
     st.caption(
-        "Demo roles are for judging only; they are not authenticated accounts."
+        "Demo roles are for judging only; "
+        "they are not authenticated accounts."
     )
 
 
@@ -295,7 +475,10 @@ T_review, T_image, T_queue, T_insights, T_rulebook = st.tabs([
 
 with T_review:
 
-    left, right = st.columns([3, 2], gap="large")
+    left, right = st.columns(
+        [3, 2],
+        gap="large"
+    )
 
     with left:
 
@@ -323,7 +506,10 @@ with T_review:
 
         if up_doc is not None:
 
-            sig = (up_doc.name, up_doc.size)
+            sig = (
+                up_doc.name,
+                up_doc.size
+            )
 
             if st.session_state.get("doc_sig") != sig:
 
@@ -341,14 +527,19 @@ with T_review:
                     st.session_state["doc_msg"] = (
                         "ok",
                         "Loaded %d characters from %s. %s"
-                        % (len(doc_text), up_doc.name, doc_note)
+                        % (
+                            len(doc_text),
+                            up_doc.name,
+                            doc_note
+                        )
                     )
 
                 except Exception as e:
 
                     st.session_state["doc_msg"] = (
                         "err",
-                        "Could not read %s: %s" % (up_doc.name, e)
+                        "Could not read %s: %s"
+                        % (up_doc.name, e)
                     )
 
             kind, msg_doc = st.session_state.get(
@@ -369,7 +560,10 @@ with T_review:
 
         document_error = (
             is_document
-            and st.session_state.get("doc_msg", ("", ""))[0] != "ok"
+            and st.session_state.get(
+                "doc_msg",
+                ("", "")
+            )[0] != "ok"
         )
 
         if tkey in st.session_state:
@@ -378,7 +572,9 @@ with T_review:
                 "Draft content",
                 height=170,
                 key=tkey,
-                placeholder="Paste a post, caption, email or ad copy here…"
+                placeholder=(
+                    "Paste a post, caption, email or ad copy here…"
+                )
             )
 
         else:
@@ -388,13 +584,16 @@ with T_review:
                 SAMPLES.get(sample, ""),
                 height=170,
                 key=tkey,
-                placeholder="Paste a post, caption, email or ad copy here…"
+                placeholder=(
+                    "Paste a post, caption, email or ad copy here…"
+                )
             )
 
         if has_key():
 
             use_ai = st.checkbox(
-                "🤖 Run multilingual AI moderation (marketing: brand governance; documents: safety only)",
+                "🤖 Run multilingual AI moderation "
+                "(marketing: brand governance; documents: safety only)",
                 True
             )
 
@@ -403,8 +602,10 @@ with T_review:
             use_ai = False
 
             st.warning(
-                "AI moderation is not configured. This run will check only your local rulebook. "
-                "Add OPENAI_API_KEY or OPENROUTER_API_KEY to Streamlit secrets."
+                "AI moderation is not configured. "
+                "This run will check only your local rulebook. "
+                "Add OPENAI_API_KEY or OPENROUTER_API_KEY "
+                "to Streamlit secrets."
             )
 
         if st.button(
@@ -419,7 +620,11 @@ with T_review:
 
             else:
 
-                F0 = [] if is_document else review(text, RB)
+                F0 = (
+                    []
+                    if is_document
+                    else review(text, RB)
+                )
 
                 ai_status = "rules_only"
                 ai_error = ""
@@ -442,7 +647,10 @@ with T_review:
                                 brand_mode=not is_document
                             )
 
-                            F0 = merge_findings(F0, ai_findings)
+                            F0 = merge_findings(
+                                F0,
+                                ai_findings
+                            )
 
                             ai_status = "completed"
 
@@ -451,13 +659,16 @@ with T_review:
                             ai_status = "unverified"
                             ai_error = str(e)
 
+                draft_id = get_draft_id(title)
+
                 st.session_state["res"] = (
                     time.time_ns(),
                     text,
                     F0,
                     title,
                     ai_status,
-                    ai_error
+                    ai_error,
+                    draft_id
                 )
 
     with right:
@@ -465,9 +676,12 @@ with T_review:
         st.markdown(
             ui.panel(
                 "🧭 What gets checked",
-                "🎭 <b>Tone</b> and pressure wording<br>📖 <b>Terminology</b> and brand name<br>"
-                "⚠️ <b>Claims</b> with no approved proof<br>🧾 <b>Facts</b> vs approved prices and policies<br>"
-                "♿ <b>Accessibility</b> (alt text, link text)<br>📎 <b>Documents</b> (.txt, .docx, .pdf) and "
+                "🎭 <b>Tone</b> and pressure wording<br>"
+                "📖 <b>Terminology</b> and brand name<br>"
+                "⚠️ <b>Claims</b> with no approved proof<br>"
+                "🧾 <b>Facts</b> vs approved prices and policies<br>"
+                "♿ <b>Accessibility</b> (alt text, link text)<br>"
+                "📎 <b>Documents</b> (.txt, .docx, .pdf) and "
                 "🖼️ <b>images</b> (see the Image review tab)<br><br>"
                 "<small>Every finding cites its rule ID and source.</small>"
             ),
@@ -478,7 +692,15 @@ with T_review:
 
     if "res" in st.session_state:
 
-        rid, text0, F, title0, ai_status, ai_error = st.session_state["res"]
+        (
+            rid,
+            text0,
+            F,
+            title0,
+            ai_status,
+            ai_error,
+            draft_id
+        ) = st.session_state["res"]
 
         if ai_status == "completed":
 
@@ -488,46 +710,68 @@ with T_review:
             )
 
             st.success(
-                "AI moderation completed. Findings are AI-assisted and should be confirmed by a human reviewer."
+                "AI moderation completed. Findings are AI-assisted "
+                "and should be confirmed by a human reviewer."
             )
 
             st.caption(
-                "A clean result means these checks found no issue; it is not a guarantee of perfect detection."
+                "A clean result means these checks found no issue; "
+                "it is not a guarantee of perfect detection."
             )
 
         elif ai_status == "unverified":
 
             st.error(
-                "UNVERIFIED — the AI moderation did not complete. This is not a Safe result."
+                "UNVERIFIED — the AI moderation did not complete. "
+                "This is not a Safe result."
             )
 
-            st.caption("Reason: " + ui.E(ai_error[:500]))
+            st.caption(
+                "Reason: " + ui.E(ai_error[:500])
+            )
 
             st.info(
-                "Local rulebook findings are shown below, but general multilingual moderation could not be confirmed."
+                "Local rulebook findings are shown below, but general "
+                "multilingual moderation could not be confirmed."
             )
 
         else:
 
             st.warning(
-                "RULE-ONLY CHECK — AI moderation was not run. No overall Safe result is being claimed."
+                "RULE-ONLY CHECK — AI moderation was not run. "
+                "No overall Safe result is being claimed."
             )
 
         applied = {
             i
             for i, f in enumerate(F)
-            if f["replacement"] is not None
-            and st.session_state.get("ap%s_%d" % (rid, i), True)
-            and not st.session_state.get("dm%s_%d" % (rid, i), False)
+            if (
+                f["replacement"] is not None
+                and st.session_state.get(
+                    "ap%s_%d" % (rid, i),
+                    True
+                )
+                and not st.session_state.get(
+                    "dm%s_%d" % (rid, i),
+                    False
+                )
+            )
         }
 
         fixed = apply_fixes(
             text0,
             F,
-            {i for i in range(len(F)) if i not in applied}
+            {
+                i
+                for i in range(len(F))
+                if i not in applied
+            }
         )
 
-        a, b = st.columns(2, gap="large")
+        a, b = st.columns(
+            2,
+            gap="large"
+        )
 
         a.markdown(
             ui.annotate(text0, F),
@@ -544,7 +788,9 @@ with T_review:
 
         if F:
 
-            st.markdown("#### 🔎 Findings: why each was flagged")
+            st.markdown(
+                "#### 🔎 Findings: why each was flagged"
+            )
 
             for i, f in enumerate(F):
 
@@ -553,7 +799,9 @@ with T_review:
                     unsafe_allow_html=True
                 )
 
-                x1, x2, _ = st.columns([1.3, 1.8, 3])
+                x1, x2, _ = st.columns(
+                    [1.3, 1.8, 3]
+                )
 
                 if f["replacement"] is not None:
 
@@ -574,85 +822,135 @@ with T_review:
             "Edit freely before sending for approval",
             fixed,
             height=120,
-            key="final_%s_%d" % (rid, hash(fixed))
+            key="final_%s" % rid
+        )
+
+        already_submitted = (
+            st.session_state.get("submitted_rid") == rid
         )
 
         if role == "Creator":
 
             submit_clicked = st.button(
                 "📤 Submit for approval",
-                type="primary"
+                type="primary",
+                disabled=already_submitted
             )
+
+            if already_submitted:
+
+                st.success(
+                    "This review result has already been submitted."
+                )
 
         else:
 
             st.info(
-                "Only the Creator role can submit drafts. Switch to Creator to test submission."
+                "Only the Creator role can submit drafts. "
+                "Switch to Creator to test submission."
             )
 
             submit_clicked = False
 
         if submit_clicked:
 
-            d = load()
+            try:
 
-            for i, f in enumerate(F):
+                d = load()
 
-                d["log"].append({
-                    "rule": f["rule"],
-                    "category": f["category"],
-                    "dismissed": bool(
-                        st.session_state.get("dm%s_%d" % (rid, i), False)
-                    ),
-                    "time": now()
-                })
+                for i, f in enumerate(F):
 
-            item = next(
-                (x for x in d["items"] if x["title"] == title0),
-                None
-            )
+                    d["log"].append({
+                        "rule": f["rule"],
+                        "category": f["category"],
+                        "dismissed": bool(
+                            st.session_state.get(
+                                "dm%s_%d" % (rid, i),
+                                False
+                            )
+                        ),
+                        "time": now()
+                    })
 
-            if item is None:
-
-                item = {
-                    "id": uuid.uuid4().hex[:6],
-                    "title": title0,
-                    "author": who,
-                    "status": "Pending review",
-                    "versions": [],
-                    "comments": []
-                }
-
-                d["items"].append(item)
-
-            item["versions"].append({
-                "v": len(item["versions"]) + 1,
-                "text": final,
-                "time": now(),
-                "issues": len(F),
-                "by": who,
-                "ai_review": ai_status
-            })
-
-            item["status"] = "Pending review"
-
-            save(d)
-
-            if any(f["severity"] == "Critical" for f in F):
-
-                st.warning(
-                    "🚫 This draft has a safety flag. A human reviewer must look at it before anything is published."
+                item = find_submission(
+                    d,
+                    draft_id,
+                    title0,
+                    who
                 )
 
-            st.toast(
-                "Submitted as version %d. Open the Approval queue."
-                % len(item["versions"]),
-                icon="📤"
-            )
+                if item is None:
 
-            st.success(
-                "Submitted! Switch to Reviewer and open the Approval queue tab."
-            )
+                    item = {
+                        "id": uuid.uuid4().hex[:6],
+                        "draft_id": draft_id,
+                        "title": title0,
+                        "author": who,
+                        "status": "Pending review",
+                        "versions": [],
+                        "comments": []
+                    }
+
+                    d["items"].append(item)
+
+                item.setdefault("comments", [])
+                item.setdefault("versions", [])
+
+                item["versions"].append({
+                    "v": len(item["versions"]) + 1,
+                    "text": final,
+                    "time": now(),
+                    "issues": len(F),
+                    "by": who,
+                    "ai_review": ai_status,
+                    "ai_error": (
+                        ai_error[:500]
+                        if ai_status == "unverified"
+                        else ""
+                    )
+                })
+
+                item["status"] = "Pending review"
+
+                save(d)
+
+                st.session_state["submitted_rid"] = rid
+
+                if any(
+                    f["severity"] == "Critical"
+                    for f in F
+                ):
+
+                    st.warning(
+                        "🚫 This draft has a safety flag. "
+                        "A human reviewer must look at it before anything is published."
+                    )
+
+                if ai_status == "unverified":
+
+                    st.warning(
+                        "⚠️ This submission has been saved for human review, "
+                        "but its AI moderation is UNVERIFIED. "
+                        "It cannot be approved until a successful AI review is completed."
+                    )
+
+                st.toast(
+                    "Submitted as version %d. Open the Approval queue."
+                    % len(item["versions"]),
+                    icon="📤"
+                )
+
+                st.success(
+                    "Submitted! Switch to Reviewer and open the Approval queue tab."
+                )
+
+            except Exception as e:
+
+                st.error(
+                    "Submission could not be saved. "
+                    "Your review is still available on this page. "
+                    "Database error: %s" % e
+                )
 
 
 # ---------------- tab 2: image review ----------------
@@ -662,9 +960,11 @@ with T_image:
     st.markdown("#### 🖼️ Image review")
 
     st.caption(
-        "Upload a post image or banner. BrandGuard runs quick local checks (alt text, size, contrast, brand colours) and, "
-        "when configured, an AI vision review (OpenAI primary, OpenRouter fallback) that reads the text inside the image "
-        "(English, Hindi, Hinglish) and looks for unsafe content."
+        "Upload a post image or banner. BrandGuard runs quick local checks "
+        "(alt text, size, contrast, brand colours) and, when configured, "
+        "an AI vision review (OpenAI primary, OpenRouter fallback) that "
+        "reads the text inside the image (English, Hindi, Hinglish) "
+        "and looks for unsafe content."
     )
 
     img = st.file_uploader(
@@ -678,7 +978,20 @@ with T_image:
         key="img_alt"
     )
 
+    current_image_sig = None
+
     if img is not None:
+
+        current_image_sig = (
+            img.name,
+            img.size
+        )
+
+        if st.session_state.get("img_sig") != current_image_sig:
+
+            st.session_state["img_sig"] = current_image_sig
+
+            st.session_state.pop("img_res", None)
 
         st.image(
             img.getvalue(),
@@ -686,17 +999,26 @@ with T_image:
             width=360
         )
 
-        if st.button("🔎 Run image review", type="primary"):
+        if st.button(
+            "🔎 Run image review",
+            type="primary"
+        ):
 
             data = img.getvalue()
 
-            local, vf, extracted, vstatus, verr = (
-                [], [], "", "not_configured", ""
-            )
+            local = []
+            vf = []
+            extracted = ""
+            vstatus = "not_configured"
+            verr = ""
 
             try:
 
-                local = uploads.local_image_checks(data, alt, RB)
+                local = uploads.local_image_checks(
+                    data,
+                    alt,
+                    RB
+                )
 
                 with st.spinner("Reviewing the image…"):
 
@@ -719,10 +1041,15 @@ with T_image:
                             vstatus = "unverified"
                             verr = str(e)
 
-                tf = review(extracted, RB) if extracted.strip() else []
+                tf = (
+                    review(extracted, RB)
+                    if extracted.strip()
+                    else []
+                )
 
                 st.session_state["img_res"] = {
                     "rid": time.time_ns(),
+                    "sig": current_image_sig,
                     "name": img.name,
                     "alt": alt,
                     "local": local,
@@ -733,21 +1060,37 @@ with T_image:
                     "tf": tf
                 }
 
+                st.rerun()
+
             except Exception as e:
 
-                st.error("Could not read this image: %s" % e)
+                st.error(
+                    "Could not review this image: %s" % e
+                )
 
     else:
 
+        st.session_state.pop("img_sig", None)
+        st.session_state.pop("img_res", None)
+
         st.info(
-            "Upload an image to start. No image is stored; it is only used for this review."
+            "Upload an image to start. No image is stored; "
+            "it is only used for this review."
         )
 
     r = st.session_state.get("img_res")
 
-    if r:
+    if (
+        r
+        and current_image_sig is not None
+        and r.get("sig") == current_image_sig
+    ):
 
-        allF = r["local"] + r["vf"] + r["tf"]
+        allF = (
+            r["local"]
+            + r["vf"]
+            + r["tf"]
+        )
 
         st.markdown("---")
 
@@ -763,13 +1106,15 @@ with T_image:
             )
 
             st.success(
-                "AI image review completed. Findings are AI-assisted and should be confirmed by a human reviewer."
+                "AI image review completed. Findings are AI-assisted "
+                "and should be confirmed by a human reviewer."
             )
 
         elif r["vstatus"] == "unverified":
 
             st.error(
-                "UNVERIFIED — the AI image review did not complete. This is not a Safe result."
+                "UNVERIFIED — the AI image review did not complete. "
+                "This is not a Safe result."
             )
 
             st.caption(
@@ -777,13 +1122,15 @@ with T_image:
             )
 
             st.info(
-                "Local image checks are shown below, but unsafe visual content and text inside the image could not be confirmed."
+                "Local image checks are shown below, but unsafe visual "
+                "content and text inside the image could not be confirmed."
             )
 
         else:
 
             st.warning(
-                "LOCAL-ONLY CHECK — AI image review was not run (no configured API key). No overall Safe result is being claimed."
+                "LOCAL-ONLY CHECK — AI image review was not run "
+                "(no configured API key). No overall Safe result is being claimed."
             )
 
         if r["extracted"].strip():
@@ -818,7 +1165,9 @@ with T_image:
 
         if r["tf"]:
 
-            st.markdown("#### 🔤 Findings in the text inside the image")
+            st.markdown(
+                "#### 🔤 Findings in the text inside the image"
+            )
 
             for f in r["tf"]:
 
@@ -829,81 +1178,128 @@ with T_image:
 
         if role == "Creator":
 
+            image_submit_key = "img_submit_" + str(r["rid"])
+
             if st.button(
                 "📤 Submit image review for approval",
                 type="primary",
-                key="img_submit"
+                key=image_submit_key
             ):
 
-                d = load()
+                try:
 
-                for f in allF:
+                    d = load()
 
-                    d["log"].append({
-                        "rule": f["rule"],
-                        "category": f["category"],
-                        "dismissed": False,
-                        "time": now()
+                    for f in allF:
+
+                        d["log"].append({
+                            "rule": f["rule"],
+                            "category": f["category"],
+                            "dismissed": False,
+                            "time": now()
+                        })
+
+                    t_img = "Image: " + r["name"]
+
+                    image_draft_id = (
+                        "image_" + str(r["sig"][0])
+                        + "_" + str(r["sig"][1])
+                    )
+
+                    item = find_submission(
+                        d,
+                        image_draft_id,
+                        t_img,
+                        who
+                    )
+
+                    if item is None:
+
+                        item = {
+                            "id": uuid.uuid4().hex[:6],
+                            "draft_id": image_draft_id,
+                            "title": t_img,
+                            "author": who,
+                            "status": "Pending review",
+                            "versions": [],
+                            "comments": []
+                        }
+
+                        d["items"].append(item)
+
+                    item.setdefault("versions", [])
+                    item.setdefault("comments", [])
+
+                    item["versions"].append({
+                        "v": len(item["versions"]) + 1,
+                        "time": now(),
+                        "issues": len(allF),
+                        "by": who,
+                        "ai_review": r["vstatus"],
+                        "ai_error": (
+                            r["verr"][:500]
+                            if r["vstatus"] == "unverified"
+                            else ""
+                        ),
+                        "text": (
+                            "[IMAGE] %s | Alt text: %s | Text found in image: %s"
+                            % (
+                                r["name"],
+                                r["alt"] or "(none)",
+                                r["extracted"] or "(none)"
+                            )
+                        )
                     })
 
-                t_img = "Image: " + r["name"]
+                    item["status"] = "Pending review"
 
-                item = next(
-                    (x for x in d["items"] if x["title"] == t_img),
-                    None
-                )
+                    save(d)
 
-                if item is None:
+                    st.session_state[
+                        "img_submitted_" + str(r["rid"])
+                    ] = True
 
-                    item = {
-                        "id": uuid.uuid4().hex[:6],
-                        "title": t_img,
-                        "author": who,
-                        "status": "Pending review",
-                        "versions": [],
-                        "comments": []
-                    }
-
-                    d["items"].append(item)
-
-                item["versions"].append({
-                    "v": len(item["versions"]) + 1,
-                    "time": now(),
-                    "issues": len(allF),
-                    "by": who,
-                    "ai_review": (
-                        "completed"
-                        if r["vstatus"] == "completed"
-                        else r["vstatus"]
-                    ),
-                    "text": (
-                        "[IMAGE] %s | Alt text: %s | Text found in image: %s"
-                        % (
-                            r["name"],
-                            r["alt"] or "(none)",
-                            r["extracted"] or "(none)"
-                        )
+                    st.toast(
+                        "Submitted. Open the Approval queue.",
+                        icon="📤"
                     )
-                })
 
-                item["status"] = "Pending review"
+                    st.success(
+                        "Submitted! Switch to Reviewer and open "
+                        "the Approval queue tab. "
+                        "(The image itself is not stored.)"
+                    )
 
-                save(d)
+                    if r["vstatus"] == "unverified":
 
-                st.toast(
-                    "Submitted. Open the Approval queue.",
-                    icon="📤"
-                )
+                        st.warning(
+                            "AI image moderation is UNVERIFIED. "
+                            "This image cannot be approved until "
+                            "a successful AI image review is completed."
+                        )
+
+                    st.rerun()
+
+                except Exception as e:
+
+                    st.error(
+                        "Image submission could not be saved: %s" % e
+                    )
+
+            if st.session_state.get(
+                "img_submitted_" + str(r["rid"]),
+                False
+            ):
 
                 st.success(
-                    "Submitted! Switch to Reviewer and open the Approval queue tab. "
-                    "(The image itself is not stored.)"
+                    "This image review has already been submitted."
                 )
 
         else:
 
             st.info(
-                "Only the Creator role can submit. Switch to Creator to test submission."
+                "Only the Creator role can submit. "
+                "Switch to Creator to test submission."
             )
 
 
@@ -914,9 +1310,26 @@ with T_queue:
     if st.session_state.pop("celebrate", False):
 
         st.balloons()
-        st.toast("Approved! Ready to publish.", icon="🎉")
 
-    d = load()
+        st.toast(
+            "Approved! Ready to publish.",
+            icon="🎉"
+        )
+
+    try:
+
+        d = load()
+
+    except Exception as e:
+
+        st.error(
+            "Could not load the approval queue: %s" % e
+        )
+
+        d = {
+            "items": [],
+            "log": []
+        }
 
     if not d["items"]:
 
@@ -924,27 +1337,60 @@ with T_queue:
             ui.empty(
                 "📭",
                 "Nothing to review yet",
-                "Submit a draft from the Review tab, or click 'Demo data' in the sidebar."
+                "Submit a draft from the Review tab, "
+                "or click 'Demo data' in the sidebar."
             ),
             unsafe_allow_html=True
         )
 
     for it in d["items"]:
 
+        it.setdefault("versions", [])
+        it.setdefault("comments", [])
+
         with st.container(border=True):
 
             st.markdown(
-                "**%s** &nbsp; %s &nbsp; <small>v%d · by %s</small>"
+                "**%s** &nbsp; %s &nbsp; "
+                "<small>v%d · by %s</small>"
                 % (
-                    ui.E(it["title"]),
-                    ui.status_chip(it["status"]),
+                    ui.E(it.get("title", "Untitled")),
+                    ui.status_chip(
+                        it.get("status", "Pending review")
+                    ),
                     len(it["versions"]),
-                    ui.E(it["author"])
+                    ui.E(it.get("author", "Unknown"))
                 ),
                 unsafe_allow_html=True
             )
 
-            with st.expander("Revision history and comments"):
+            latest_status = latest_ai_status(it)
+
+            if latest_status == "unverified":
+
+                st.error(
+                    "⚠️ Latest AI moderation: UNVERIFIED. "
+                    "Approval is disabled until a successful AI review "
+                    "is completed in a new version."
+                )
+
+            elif latest_status == "rules_only":
+
+                st.warning(
+                    "Latest review used local rules only. "
+                    "AI moderation was not run."
+                )
+
+            elif latest_status == "completed":
+
+                st.caption(
+                    "Latest AI moderation: completed. "
+                    "Human review is still required."
+                )
+
+            with st.expander(
+                "Revision history and comments"
+            ):
 
                 for k, v in enumerate(it["versions"]):
 
@@ -954,12 +1400,13 @@ with T_queue:
                     )
 
                     st.markdown(
-                        "**🕘 Version %d** · %s · %s · %d issues · AI: %s"
+                        "**🕘 Version %d** · %s · %s · "
+                        "%d issues · AI: %s"
                         % (
-                            v["v"],
-                            v["time"],
-                            v["by"],
-                            v["issues"],
+                            v.get("v", k + 1),
+                            v.get("time", ""),
+                            ui.E(v.get("by", "Unknown")),
+                            v.get("issues", 0),
                             ui.E(review_label)
                         )
                     )
@@ -970,8 +1417,11 @@ with T_queue:
                             ui.panel(
                                 "Changes from previous version",
                                 diff_html(
-                                    it["versions"][k - 1]["text"],
-                                    v["text"]
+                                    it["versions"][k - 1].get(
+                                        "text",
+                                        ""
+                                    ),
+                                    v.get("text", "")
                                 )
                             ),
                             unsafe_allow_html=True
@@ -980,8 +1430,18 @@ with T_queue:
                     else:
 
                         st.markdown(
-                            ui.panel("Original", ui.E(v["text"])),
+                            ui.panel(
+                                "Original",
+                                ui.E(v.get("text", ""))
+                            ),
                             unsafe_allow_html=True
+                        )
+
+                    if v.get("ai_error"):
+
+                        st.caption(
+                            "AI error: "
+                            + ui.E(v["ai_error"])
                         )
 
                 for c in it["comments"]:
@@ -989,15 +1449,19 @@ with T_queue:
                     st.markdown(
                         "💬 **%s** (%s, %s) · %s: %s"
                         % (
-                            ui.E(c["who"]),
-                            c["role"],
-                            c["time"],
-                            c["action"],
-                            ui.E(c["msg"])
+                            ui.E(c.get("who", "Unknown")),
+                            ui.E(c.get("role", "")),
+                            ui.E(c.get("time", "")),
+                            ui.E(c.get("action", "")),
+                            ui.E(c.get("msg", ""))
                         )
                     )
 
-            if role in ("Reviewer", "Manager", "Admin"):
+            if role in (
+                "Reviewer",
+                "Manager",
+                "Admin"
+            ):
 
                 msg = st.text_input(
                     "Comment for the creator",
@@ -1026,42 +1490,114 @@ with T_queue:
                     if role == "Manager":
 
                         st.caption(
-                            "Manager permissions: oversee submissions and approve, request changes or reject."
+                            "Manager permissions: oversee submissions "
+                            "and approve, request changes or reject."
                         )
 
                     else:
 
                         st.caption(
-                            "Admin permissions: full review decisions and session administration."
+                            "Admin permissions: full review decisions "
+                            "and session administration."
                         )
 
                 cols = st.columns(len(decisions))
 
-                for col, (label, status) in zip(cols, decisions):
+                for col, (label, status) in zip(
+                    cols,
+                    decisions
+                ):
 
-                    if col.button(label, key=label + it["id"]):
+                    approval_blocked = (
+                        status == "Approved"
+                        and is_ai_unverified(it)
+                    )
 
-                        it["status"] = status
+                    if col.button(
+                        label,
+                        key=label + it["id"],
+                        disabled=approval_blocked
+                    ):
 
-                        it["comments"].append({
-                            "who": who,
-                            "role": role,
-                            "time": now(),
-                            "action": label.split(" ", 1)[1],
-                            "msg": msg or "-"
-                        })
+                        try:
 
-                        save(d)
+                            # Reload the shared data immediately before
+                            # updating the submission.
+                            latest_data = load()
 
-                        if status == "Approved":
-                            st.session_state["celebrate"] = True
+                            latest_item = next(
+                                (
+                                    x
+                                    for x in latest_data["items"]
+                                    if x.get("id") == it.get("id")
+                                ),
+                                None
+                            )
 
-                        st.rerun()
+                            if latest_item is None:
+
+                                st.error(
+                                    "This submission no longer exists. "
+                                    "Refresh the page."
+                                )
+
+                                st.stop()
+
+                            latest_item.setdefault(
+                                "comments",
+                                []
+                            )
+
+                            latest_item.setdefault(
+                                "versions",
+                                []
+                            )
+
+                            # Re-check the latest saved version.
+                            if (
+                                status == "Approved"
+                                and is_ai_unverified(latest_item)
+                            ):
+
+                                st.error(
+                                    "Approval blocked. The latest AI "
+                                    "moderation is UNVERIFIED."
+                                )
+
+                                st.stop()
+
+                            latest_item["status"] = status
+
+                            latest_item["comments"].append({
+                                "who": who,
+                                "role": role,
+                                "time": now(),
+                                "action": label.split(
+                                    " ",
+                                    1
+                                )[1],
+                                "msg": msg or "-"
+                            })
+
+                            save(latest_data)
+
+                            if status == "Approved":
+
+                                st.session_state["celebrate"] = True
+
+                            st.rerun()
+
+                        except Exception as e:
+
+                            st.error(
+                                "Decision could not be saved: %s" % e
+                            )
 
             else:
 
                 st.caption(
-                    "🔒 Creator access is view-only in the approval queue. Switch to Reviewer to make decisions."
+                    "🔒 Creator access is view-only in the approval queue. "
+                    "Switch to Reviewer to make decisions."
                 )
 
 
@@ -1072,13 +1608,29 @@ with T_insights:
     if role not in ("Manager", "Admin"):
 
         st.info(
-            "Insights are available to Manager and Admin roles. Switch roles in the sidebar to view them."
+            "Insights are available to Manager and Admin roles. "
+            "Switch roles in the sidebar to view them."
         )
 
     else:
 
-        d = load()
-        log = pd.DataFrame(d["log"])
+        try:
+
+            d = load()
+            log = pd.DataFrame(d["log"])
+
+        except Exception as e:
+
+            st.error(
+                "Could not load insights: %s" % e
+            )
+
+            log = pd.DataFrame()
+
+            d = {
+                "items": [],
+                "log": []
+            }
 
         if log.empty:
 
@@ -1086,7 +1638,8 @@ with T_insights:
                 ui.empty(
                     "📊",
                     "No insights yet",
-                    "Submit a few reviews, or click 'Demo data' in the sidebar to see repeated mistakes."
+                    "Submit a few reviews, or click 'Demo data' "
+                    "in the sidebar to see repeated mistakes."
                 ),
                 unsafe_allow_html=True
             )
@@ -1096,7 +1649,10 @@ with T_insights:
             st.markdown(
                 ui.metric_cards([
                     (
-                        sum(len(i["versions"]) for i in d["items"]),
+                        sum(
+                            len(i.get("versions", []))
+                            for i in d["items"]
+                        ),
                         "📝 Drafts submitted"
                     ),
                     (
@@ -1104,58 +1660,79 @@ with T_insights:
                         "🔎 Issues found"
                     ),
                     (
-                        sum(1 for i in d["items"] if i["status"] == "Approved"),
+                        sum(
+                            1
+                            for i in d["items"]
+                            if i.get("status") == "Approved"
+                        ),
                         "✅ Approved items"
                     )
                 ]),
                 unsafe_allow_html=True
             )
 
-            g = (
-                log.groupby("rule")
-                .agg(
-                    hits=("rule", "count"),
-                    dismissed=("dismissed", "sum")
+            if "rule" in log.columns:
+
+                g = (
+                    log.groupby("rule")
+                    .agg(
+                        hits=("rule", "count"),
+                        dismissed=("dismissed", "sum")
+                    )
+                    .reset_index()
                 )
-                .reset_index()
-            )
 
-            g["unclear_%"] = (
-                100 * g["dismissed"] / g["hits"]
-            ).round(0)
+                g["unclear_%"] = (
+                    100 * g["dismissed"] / g["hits"]
+                ).round(0)
 
-            c1, c2 = st.columns(2, gap="large")
+                c1, c2 = st.columns(
+                    2,
+                    gap="large"
+                )
 
-            with c1:
+                with c1:
+
+                    st.markdown(
+                        "#### 🔁 Most repeated mistakes (by rule)"
+                    )
+
+                    st.bar_chart(
+                        g.set_index("rule")["hits"],
+                        color="#6C5CE7"
+                    )
+
+                with c2:
+
+                    st.markdown(
+                        "#### 🧩 Issues by category"
+                    )
+
+                    if "category" in log.columns:
+
+                        st.bar_chart(
+                            log.groupby("category").size(),
+                            color="#15AABF"
+                        )
 
                 st.markdown(
-                    "#### 🔁 Most repeated mistakes (by rule)"
+                    "#### 🤔 Rules people keep dismissing "
+                    "(the guideline may be unclear)"
                 )
 
-                st.bar_chart(
-                    g.set_index("rule")["hits"],
-                    color="#6C5CE7"
+                st.dataframe(
+                    g.sort_values(
+                        "unclear_%",
+                        ascending=False
+                    ),
+                    hide_index=True
                 )
 
-            with c2:
+            else:
 
-                st.markdown(
-                    "#### 🧩 Issues by category"
+                st.info(
+                    "No rule-level insight data is available yet."
                 )
-
-                st.bar_chart(
-                    log.groupby("category").size(),
-                    color="#15AABF"
-                )
-
-            st.markdown(
-                "#### 🤔 Rules people keep dismissing (the guideline may be unclear)"
-            )
-
-            st.dataframe(
-                g.sort_values("unclear_%", ascending=False),
-                hide_index=True
-            )
 
 
 # ---------------- tab 5: rulebook ----------------
@@ -1167,15 +1744,23 @@ with T_rulebook:
     )
 
     st.caption(
-        "Every finding cites a rule ID from here. If nothing here supports a claim, it is marked 'Unverified: needs human check'."
+        "Every finding cites a rule ID from here. "
+        "If nothing here supports a claim, it is marked "
+        "'Unverified: needs human check'."
     )
 
     st.markdown(
-        ui.panel("🎭 Tone", ui.E(RB["tone"]["summary"])),
+        ui.panel(
+            "🎭 Tone",
+            ui.E(RB["tone"]["summary"])
+        ),
         unsafe_allow_html=True
     )
 
-    c1, c2 = st.columns(2, gap="large")
+    c1, c2 = st.columns(
+        2,
+        gap="large"
+    )
 
     with c1:
 
@@ -1210,7 +1795,10 @@ with T_rulebook:
 
     st.markdown(
         "**⚠️ Approved evidence for claims:** "
-        + (", ".join(RB["approved_claims"]) or "none")
+        + (
+            ", ".join(RB["approved_claims"])
+            or "none"
+        )
     )
 
     with st.expander("View raw rulebook (JSON)"):
@@ -1221,6 +1809,7 @@ with T_rulebook:
 # ---------------- footer ----------------
 
 st.markdown(
-    '<div class="foot">Built by Team Binary Brains · AI-assisted development is disclosed in the README</div>',
+    '<div class="foot">Built by Team Binary Brains · '
+    'AI-assisted development is disclosed in the README</div>',
     unsafe_allow_html=True
 )
