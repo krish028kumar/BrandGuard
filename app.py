@@ -7,6 +7,7 @@ import uuid
 import pandas as pd
 import streamlit as st
 
+import database
 from engine import load_rulebook, review, apply_fixes, diff_html, merge_findings
 from ai_check import run_ai_check
 import uploads
@@ -25,7 +26,7 @@ st.set_page_config(
 st.markdown(ui.CSS, unsafe_allow_html=True)
 
 RB = load_rulebook()
-STORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "store.json")
+
 
 SAMPLES = {
     "Messy launch post": "BrightKart is the BEST store in India!!! Our users get 100% guaranteed delivery. Free shipping on orders above Rs 399, and 30-day returns. Click here to shop now, hurry!",
@@ -41,19 +42,15 @@ ROLE_ICON = {
     "Admin": "🛠️"
 }
 
-SESSION_STORE_KEY = "brandguard_store"
 
-
-# ---------------- session storage ----------------
+# ---------------- shared database storage ----------------
 
 def load():
-    if SESSION_STORE_KEY not in st.session_state:
-        st.session_state[SESSION_STORE_KEY] = {
-            "items": [],
-            "log": []
-        }
+    data = database.load_data()
 
-    data = st.session_state[SESSION_STORE_KEY]
+    if not isinstance(data, dict):
+        data = {"items": [], "log": []}
+
     data.setdefault("items", [])
     data.setdefault("log", [])
 
@@ -61,7 +58,7 @@ def load():
 
 
 def save(d):
-    st.session_state[SESSION_STORE_KEY] = d
+    database.save_data(d)
 
 
 def now():
@@ -73,8 +70,10 @@ def now():
 def _setting(name, default=""):
     try:
         value = st.secrets.get(name, default)
+
         if value:
             return value
+
     except Exception:
         pass
 
@@ -118,6 +117,7 @@ def seed():
     added = 0
 
     for name, status in plan:
+
         demo_title = name + " (demo)"
 
         if demo_title in existing:
@@ -127,6 +127,7 @@ def seed():
         findings = review(t, RB)
 
         for k, finding in enumerate(findings):
+
             d["log"].append({
                 "rule": finding["rule"],
                 "category": finding["category"],
@@ -139,6 +140,7 @@ def seed():
         comments = []
 
         if status == "Approved":
+
             comments = [{
                 "who": "Demo reviewer",
                 "role": "Reviewer",
@@ -148,6 +150,7 @@ def seed():
             }]
 
         elif status == "Changes requested":
+
             comments = [{
                 "who": "Demo reviewer",
                 "role": "Reviewer",
@@ -184,12 +187,14 @@ def seed():
         added += 1
 
     save(d)
+
     return added
 
 
 # ---------------- sidebar ----------------
 
 with st.sidebar:
+
     st.markdown("## 🛡️ BrandGuard")
     st.caption("Automation suggests. Humans decide.")
 
@@ -211,6 +216,7 @@ with st.sidebar:
     )
 
     if st.button("🎬 Demo data", use_container_width=True):
+
         added = seed()
 
         if added:
@@ -221,21 +227,26 @@ with st.sidebar:
         st.rerun()
 
     if role == "Admin":
+
         st.markdown("**🛠️ Admin controls**")
 
         if not st.session_state.get("reset_pending", False):
+
             if st.button("🧹 Reset all data", use_container_width=True):
+
                 st.session_state["reset_pending"] = True
                 st.rerun()
 
         else:
+
             st.warning(
-                "This clears submissions, comments and insights in this browser session."
+                "This clears submissions, comments and insights for everyone using BrandGuard."
             )
 
             confirm_col, cancel_col = st.columns(2)
 
             if confirm_col.button("Confirm reset", type="primary"):
+
                 save({"items": [], "log": []})
 
                 st.session_state.pop("res", None)
@@ -243,19 +254,24 @@ with st.sidebar:
                 st.session_state.pop("celebrate", None)
 
                 st.session_state["reset_pending"] = False
+
                 st.rerun()
 
             if cancel_col.button("Cancel"):
+
                 st.session_state["reset_pending"] = False
                 st.rerun()
 
     else:
+
         st.caption(
             "Reset is available to Admin only. Switch the role above to test it."
         )
 
     st.markdown(ui.privacy_card(), unsafe_allow_html=True)
+
     st.caption("Sample brand: " + RB["company"])
+
     st.caption(
         "Demo roles are for judging only; they are not authenticated accounts."
     )
@@ -314,6 +330,7 @@ with T_review:
                 st.session_state["doc_sig"] = sig
 
                 try:
+
                     doc_text, doc_note = uploads.extract_text(
                         up_doc.name,
                         up_doc.getvalue()
@@ -328,6 +345,7 @@ with T_review:
                     )
 
                 except Exception as e:
+
                     st.session_state["doc_msg"] = (
                         "err",
                         "Could not read %s: %s" % (up_doc.name, e)
@@ -345,10 +363,10 @@ with T_review:
                 st.error(msg_doc)
 
         else:
+
             st.session_state.pop("doc_sig", None)
             st.session_state.pop("doc_msg", None)
 
-        # Prevent reviewing an uploaded document if extraction failed.
         document_error = (
             is_document
             and st.session_state.get("doc_msg", ("", ""))[0] != "ok"
@@ -401,7 +419,6 @@ with T_review:
 
             else:
 
-                # Academic documents skip local BrightKart brand checks.
                 F0 = [] if is_document else review(text, RB)
 
                 ai_status = "rules_only"
@@ -416,6 +433,7 @@ with T_review:
                     if use_ai:
 
                         try:
+
                             ai_findings = run_ai_check(
                                 text,
                                 RB,
@@ -425,9 +443,11 @@ with T_review:
                             )
 
                             F0 = merge_findings(F0, ai_findings)
+
                             ai_status = "completed"
 
                         except Exception as e:
+
                             ai_status = "unverified"
                             ai_error = str(e)
 
@@ -536,6 +556,7 @@ with T_review:
                 x1, x2, _ = st.columns([1.3, 1.8, 3])
 
                 if f["replacement"] is not None:
+
                     x1.checkbox(
                         "Apply fix",
                         True,
@@ -682,6 +703,7 @@ with T_image:
                     if has_key():
 
                         try:
+
                             extracted, vf = uploads.vision_review(
                                 data,
                                 RB,
@@ -693,6 +715,7 @@ with T_image:
                             vstatus = "completed"
 
                         except Exception as e:
+
                             vstatus = "unverified"
                             verr = str(e)
 
