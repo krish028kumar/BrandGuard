@@ -78,11 +78,11 @@ def build_prompt(draft, rb):
         "Each item must contain: "
         '{"phrase":"exact contiguous text copied from draft","category":"Safety|Tone|Claim|Fact|Terminology|Accessibility",'
          '"severity":"Critical|High|Medium|Low","why":"short explanation","rule":"rule ID or AI",'
-         '"suggestion":"short practical correction or human-review action",'
-         '"replacement":"complete safe replacement text, or null if no rewrite is appropriate"}.\n'
-         "IMPORTANT: For targeted abuse or insults, provide a complete respectful replacement. "
-         "Never repeat the abusive wording in the replacement. Preserve the intended message where possible.\n"
-        "The phrase must be copied exactly and contiguously, preserving original script and spelling. "
+        '"suggestion":"short practical correction or human-review action",'
+'"replacement":"complete safe replacement text, or null if no rewrite is appropriate"}.\n'
+"IMPORTANT: For targeted abuse or insults, provide a complete respectful replacement. "
+"Never repeat the abusive wording in the replacement. Preserve the intended meaning where possible.\n"
+"The phrase must be copied exactly and contiguously, preserving original wording.\n"
         "Do not invent or translate it. If an issue concerns the whole draft, quote the shortest exact problematic span. "
         "No markdown or text outside the JSON array.\n\n"
         "DRAFT TO REVIEW:\n<<<DRAFT_START>>>\n" + draft + "\n<<<DRAFT_END>>>"
@@ -182,10 +182,11 @@ def parse(out, draft):
             "source": "AI review (OpenAI/OpenRouter)",
             "suggestion": str(item.get("suggestion") or "Review manually"),
            "replacement": (
-           str(item["replacement"]).strip()
-           if isinstance(item.get("replacement"), str)
-            and item["replacement"].strip()
-               else None
+    item.get("replacement").strip()
+    if isinstance(item.get("replacement"), str)
+    and item.get("replacement").strip()
+    and item.get("replacement").strip().casefold() != phrase.strip().casefold()
+    else None
 ),
             "confidence": "AI-assisted: a human must confirm",
         })
