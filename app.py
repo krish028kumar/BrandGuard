@@ -25,6 +25,99 @@ st.set_page_config(
 
 st.markdown(ui.CSS, unsafe_allow_html=True)
 
+# Button interaction and visual feedback.
+# Decorative layers must not block real Streamlit controls.
+st.markdown(
+    """
+    <style>
+    /* Main application must remain interactive. */
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"],
+    [data-testid="stAppViewBlockContainer"] {
+        filter: none !important;
+        -webkit-filter: none !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    /* Decorative pseudo-elements must not intercept clicks. */
+    [data-testid="stAppViewContainer"]::before,
+    [data-testid="stAppViewContainer"]::after,
+    [data-testid="stMain"]::before,
+    [data-testid="stMain"]::after,
+    .hero::before,
+    .hero::after,
+    .orb,
+    .orb::before,
+    .orb::after,
+    .ring,
+    .ring::before,
+    .ring::after {
+        pointer-events: none !important;
+    }
+
+    /* Keep Streamlit buttons clickable. */
+    [data-testid="stButton"] {
+        position: relative !important;
+        pointer-events: auto !important;
+    }
+
+    [data-testid="stButton"] > button {
+        position: relative !important;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+        transition:
+            transform 0.15s ease,
+            box-shadow 0.15s ease,
+            background-color 0.15s ease,
+            border-color 0.15s ease !important;
+    }
+
+    /* Hover movement. */
+    [data-testid="stButton"] > button:hover:not(:disabled) {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 5px 14px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* Press feedback. */
+    [data-testid="stButton"] > button:active:not(:disabled) {
+        transform: scale(0.97) !important;
+    }
+
+    /* Keyboard focus. */
+    [data-testid="stButton"] > button:focus-visible {
+        outline: 2px solid #6C5CE7 !important;
+        outline-offset: 3px !important;
+    }
+
+    [data-testid="stButton"] > button:disabled {
+        cursor: not-allowed !important;
+        opacity: 0.55 !important;
+    }
+
+    /* Other interactive controls. */
+    [data-testid="stCheckbox"],
+    [data-testid="stRadio"],
+    [data-testid="stSelectbox"],
+    [data-testid="stTextInput"],
+    [data-testid="stTextArea"],
+    [data-testid="stFileUploader"],
+    [data-testid="stDownloadButton"],
+    [data-testid="stTabs"] {
+        pointer-events: auto !important;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        [data-testid="stButton"] > button {
+            transition: none !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 RB = load_rulebook()
 
 
@@ -60,10 +153,7 @@ ROLE_ICON = {
 # ---------------- shared database storage ----------------
 
 def load():
-    """
-    Load shared BrandGuard data from Turso.
-    Never silently reset existing database records.
-    """
+    """Load shared BrandGuard data from Turso."""
 
     data = database.load_data()
 
@@ -93,10 +183,7 @@ def load():
 
 
 def save(data):
-    """
-    Save shared records to Turso.
-    Database errors must never be hidden.
-    """
+    """Save shared records to Turso."""
 
     if not isinstance(data, dict):
         raise ValueError("Invalid database data.")
@@ -128,6 +215,20 @@ def add_insights(data, findings):
             "dismissed": False,
             "time": now()
         })
+
+
+def delete_submission(data, submission_id):
+    """Permanently delete one submission from the shared queue."""
+
+    original_count = len(data["items"])
+
+    data["items"] = [
+        item
+        for item in data["items"]
+        if str(item.get("id")) != str(submission_id)
+    ]
+
+    return len(data["items"]) < original_count
 
 
 # ---------------- API settings ----------------
@@ -173,10 +274,7 @@ def vision_model_name():
 # ---------------- submission helpers ----------------
 
 def get_draft_id(title, author):
-    """
-    Generate a stable draft ID per creator and title.
-    Different creators cannot overwrite each other.
-    """
+    """Generate a stable draft ID per creator and title."""
 
     if "draft_ids" not in st.session_state:
         st.session_state["draft_ids"] = {}
@@ -194,10 +292,7 @@ def get_draft_id(title, author):
 
 
 def find_submission(data, draft_id, title, author):
-    """
-    Find a submission using its permanent ID.
-    Supports older records without draft IDs.
-    """
+    """Find a submission using its permanent ID."""
 
     for item in data["items"]:
         if item.get("draft_id") == draft_id:
@@ -234,9 +329,7 @@ def is_ai_unverified(item):
 
 
 def image_draft_id(author, filename, size):
-    """
-    Stable image submission identity per creator and uploaded file.
-    """
+    """Stable image submission identity per creator and uploaded file."""
 
     identity = (
         str(author).strip().lower()
@@ -433,7 +526,8 @@ with st.sidebar:
                         "img_res",
                         "celebrate",
                         "draft_ids",
-                        "submitted_rid"
+                        "submitted_rid",
+                        "delete_pending_id"
                     ):
                         st.session_state.pop(key, None)
 
@@ -529,6 +623,7 @@ with T_review:
                 st.session_state["doc_sig"] = sig
 
                 try:
+
                     doc_text, doc_note = uploads.extract_text(
                         up_doc.name,
                         up_doc.getvalue()
@@ -640,6 +735,7 @@ with T_review:
                 if use_ai:
 
                     try:
+
                         ai_findings = run_ai_check(
                             text,
                             RB,
@@ -889,10 +985,11 @@ with T_review:
                     item.setdefault("comments", [])
                     item.setdefault("versions", [])
 
-                    # Avoid duplicate submission of the same review.
-                    if item["versions"] and item["versions"][-1].get(
-                        "review_id"
-                    ) == str(rid):
+                    if (
+                        item["versions"]
+                        and item["versions"][-1].get("review_id")
+                        == str(rid)
+                    ):
 
                         st.session_state["submitted_rid"] = rid
                         st.info("This review has already been saved.")
@@ -922,7 +1019,6 @@ with T_review:
 
                         save(data)
 
-                        # Mark submitted only after successful database save.
                         st.session_state["submitted_rid"] = rid
 
                         if any(
@@ -942,6 +1038,8 @@ with T_review:
                                 "is completed."
                             )
 
+                        st.balloons()
+
                         st.toast(
                             "Submitted as version %d. Open the Approval queue."
                             % version_number,
@@ -949,7 +1047,8 @@ with T_review:
                         )
 
                         st.success(
-                            "Submitted! Switch to Reviewer and open the Approval queue tab."
+                            "🎉 Successfully submitted! "
+                            "Your draft is now in the Approval Queue."
                         )
 
                 except Exception as e:
@@ -1233,7 +1332,6 @@ with T_image:
                     item.setdefault("versions", [])
                     item.setdefault("comments", [])
 
-                    # Prevent accidental duplicate image submissions.
                     if (
                         item["versions"]
                         and item["versions"][-1].get("image_review_id")
@@ -1280,14 +1378,16 @@ with T_image:
 
                         st.session_state[image_submit_key] = True
 
+                        st.balloons()
+
                         st.toast(
                             "Image submitted. Open the Approval queue.",
                             icon="📤"
                         )
 
                         st.success(
-                            "Submitted! Switch to Reviewer and open "
-                            "the Approval queue tab. "
+                            "🎉 Image review submitted successfully! "
+                            "It is now in the Approval Queue. "
                             "(The image itself is not stored.)"
                         )
 
@@ -1334,7 +1434,6 @@ with T_queue:
 
     try:
 
-        # Always read the latest shared database records.
         d = load()
 
     except Exception as e:
@@ -1364,6 +1463,8 @@ with T_queue:
 
         it.setdefault("versions", [])
         it.setdefault("comments", [])
+
+        submission_id = str(it.get("id", ""))
 
         with st.container(border=True):
 
@@ -1478,7 +1579,7 @@ with T_queue:
 
                 msg = st.text_input(
                     "Comment for the creator",
-                    key="cm" + it["id"]
+                    key="cm" + submission_id
                 )
 
                 if role == "Reviewer":
@@ -1489,7 +1590,8 @@ with T_queue:
                     )
 
                     st.caption(
-                        "Reviewer permissions: approve or request changes."
+                        "Reviewer permissions: approve or request changes. "
+                        "You can also delete an unnecessary queue item."
                     )
 
                 else:
@@ -1514,7 +1616,7 @@ with T_queue:
                             "and session administration."
                         )
 
-                cols = st.columns(len(decisions))
+                cols = st.columns(len(decisions) + 1)
 
                 for col, (label, status) in zip(
                     cols,
@@ -1528,20 +1630,20 @@ with T_queue:
 
                     if col.button(
                         label,
-                        key=label + it["id"],
-                        disabled=approval_blocked
+                        key=label + submission_id,
+                        disabled=approval_blocked,
+                        use_container_width=True
                     ):
 
                         try:
 
-                            # Reload latest data before making a decision.
                             latest_data = load()
 
                             latest_item = next(
                                 (
                                     x
                                     for x in latest_data["items"]
-                                    if x.get("id") == it.get("id")
+                                    if str(x.get("id")) == submission_id
                                 ),
                                 None
                             )
@@ -1558,7 +1660,6 @@ with T_queue:
                             latest_item.setdefault("comments", [])
                             latest_item.setdefault("versions", [])
 
-                            # Recheck the current saved AI status.
                             if (
                                 status == "Approved"
                                 and is_ai_unverified(latest_item)
@@ -1581,12 +1682,22 @@ with T_queue:
                                 "msg": msg or "-"
                             })
 
-                            # Save before showing success feedback.
                             save(latest_data)
 
                             if status == "Approved":
-
                                 st.session_state["celebrate"] = True
+
+                            elif status == "Changes requested":
+                                st.toast(
+                                    "Changes requested successfully.",
+                                    icon="✏️"
+                                )
+
+                            else:
+                                st.toast(
+                                    "Submission rejected.",
+                                    icon="⛔"
+                                )
 
                             st.rerun()
 
@@ -1595,6 +1706,95 @@ with T_queue:
                             st.error(
                                 "Decision could not be saved: %s" % e
                             )
+
+                # ---------------- delete submission ----------------
+
+                delete_col = cols[-1]
+
+                if delete_col.button(
+                    "🗑️ Delete",
+                    key="delete_" + submission_id,
+                    use_container_width=True
+                ):
+
+                    st.session_state["delete_pending_id"] = submission_id
+                    st.rerun()
+
+                if (
+                    st.session_state.get("delete_pending_id")
+                    == submission_id
+                ):
+
+                    st.warning(
+                        "Are you sure you want to permanently delete "
+                        "this submission, including its revision history "
+                        "and comments? This cannot be undone."
+                    )
+
+                    confirm_col, cancel_col = st.columns(2)
+
+                    if confirm_col.button(
+                        "Yes, permanently delete",
+                        key="confirm_delete_" + submission_id,
+                        type="primary",
+                        use_container_width=True
+                    ):
+
+                        try:
+
+                            latest_data = load()
+
+                            deleted = delete_submission(
+                                latest_data,
+                                submission_id
+                            )
+
+                            if not deleted:
+
+                                st.error(
+                                    "This submission was already deleted "
+                                    "or no longer exists."
+                                )
+
+                            else:
+
+                                save(latest_data)
+
+                                st.session_state.pop(
+                                    "delete_pending_id",
+                                    None
+                                )
+
+                                st.toast(
+                                    "Submission deleted from the queue.",
+                                    icon="🗑️"
+                                )
+
+                                st.success(
+                                    "Submission and its revision history "
+                                    "were deleted successfully."
+                                )
+
+                            st.rerun()
+
+                        except Exception as e:
+
+                            st.error(
+                                "Could not delete this submission: %s" % e
+                            )
+
+                    if cancel_col.button(
+                        "Cancel",
+                        key="cancel_delete_" + submission_id,
+                        use_container_width=True
+                    ):
+
+                        st.session_state.pop(
+                            "delete_pending_id",
+                            None
+                        )
+
+                        st.rerun()
 
             else:
 
