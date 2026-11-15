@@ -18,19 +18,21 @@ SAMPLES = {
 }
 ROLE_ICON = {"Creator": "✍️", "Reviewer": "🔍", "Manager": "📈", "Admin": "🛠️"}
 
+# Streamlit Community Cloud uses temporary container storage. Keep this demo's
+# workflow data in the active browser session instead of relying on store.json.
+SESSION_STORE_KEY = "brandguard_store"
+
 def load():
-    try:
-        with open(STORE, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {"items": [], "log": []}
+    if SESSION_STORE_KEY not in st.session_state:
+        st.session_state[SESSION_STORE_KEY] = {"items": [], "log": []}
+    data = st.session_state[SESSION_STORE_KEY]
+    data.setdefault("items", [])
+    data.setdefault("log", [])
+    return data
 
 def save(d):
-    try:
-        with open(STORE, "w", encoding="utf-8") as f:
-            json.dump(d, f)
-    except Exception:
-        pass
+    # Streamlit session state survives reruns for the active browser session.
+    st.session_state[SESSION_STORE_KEY] = d
 
 def now():
     return time.strftime("%Y-%m-%d %H:%M")
@@ -57,45 +59,83 @@ def model_name():
     return _setting("OPENROUTER_MODEL", "openrouter/free")
 
 def seed():
+    """Add any missing demo examples without duplicating existing demo records."""
     d = load()
-    if any(i["title"].endswith("(demo)") for i in d["items"]):
-        return
+    existing = {i.get("title") for i in d["items"]}
     plan = [("Messy launch post", "Pending review"), ("Plan price post", "Changes requested"),
             ("Clean post", "Approved"), ("Image post", "Pending review")]
+    added = 0
     for name, status in plan:
+        demo_title = name + " (demo)"
+        if demo_title in existing:
+            continue
         t = SAMPLES[name]
-        F = review(t, RB)
-        for k, f in enumerate(F):
-            d["log"].append({"rule": f["rule"], "category": f["category"],
-                             "dismissed": f["rule"] in ("TN1", "TN4") and k % 2 == 0, "time": now()})
-        fixed = apply_fixes(t, F)
-        com = []
+        findings = review(t, RB)
+        for k, finding in enumerate(findings):
+            d["log"].append({"rule": finding["rule"], "category": finding["category"],
+                             "dismissed": finding["rule"] in ("TN1", "TN4") and k % 2 == 0,
+                             "time": now()})
+        fixed = apply_fixes(t, findings)
+        comments = []
         if status == "Approved":
-            com = [{"who": "Demo reviewer", "role": "Reviewer", "time": now(), "action": "Approve", "msg": "Looks good."}]
+            comments = [{"who": "Demo reviewer", "role": "Reviewer", "time": now(),
+                         "action": "Approve", "msg": "Looks good."}]
         elif status == "Changes requested":
-            com = [{"who": "Demo reviewer", "role": "Reviewer", "time": now(), "action": "Request changes", "msg": "Please double-check the price."}]
-        d["items"].append({"id": uuid.uuid4().hex[:6], "title": name + " (demo)", "author": "Demo creator",
-                           "status": status, "comments": com,
-                           "versions": [{"v": 1, "text": t, "time": now(), "issues": len(F), "by": "Demo creator"},
-                                        {"v": 2, "text": fixed, "time": now(), "issues": len(review(fixed, RB)), "by": "Demo creator"}]})
+            comments = [{"who": "Demo reviewer", "role": "Reviewer", "time": now(),
+                         "action": "Request changes", "msg": "Please double-check the price."}]
+        d["items"].append({
+            "id": uuid.uuid4().hex[:6], "title": demo_title, "author": "Demo creator",
+            "status": status, "comments": comments,
+            "versions": [
+                {"v": 1, "text": t, "time": now(), "issues": len(findings), "by": "Demo creator"},
+                {"v": 2, "text": fixed, "time": now(), "issues": len(review(fixed, RB)), "by": "Demo creator"}
+            ]
+        })
+        existing.add(demo_title)
+        added += 1
     save(d)
+    return added
 
 # ---------------- sidebar ----------------
 with st.sidebar:
     st.markdown("## 🛡️ BrandGuard")
     st.caption("Automation suggests. Humans decide.")
-    role = st.selectbox("Your role", list(ROLE_ICON))
-    who = st.text_input("Display name", "Krish")
+    role = st.selectbox("Your role (demo mode)", list(ROLE_ICON), key="active_role")
+    who = st.text_input("Display name", "Krish", key="display_name")
     st.markdown(ui.profile_card(who, role, ROLE_ICON[role]), unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    if c1.button("🎬 Demo data"):
-        seed()
-        st.toast("Demo data loaded (sample reviews, clearly marked 'demo').", icon="🎬")
-    if c2.button("🧹 Reset"):
-        save({"items": [], "log": []})
-        st.toast("All reviews cleared.", icon="🧹")
+
+    if st.button("🎬 Demo data", use_container_width=True):
+        added = seed()
+        if added:
+            st.success(f"Loaded {added} demo submission(s).")
+        else:
+            st.info("Demo examples are already loaded. No duplicates were added.")
+        st.rerun()
+
+    if role == "Admin":
+        st.markdown("**🛠️ Admin controls**")
+        if not st.session_state.get("reset_pending", False):
+            if st.button("🧹 Reset all data", use_container_width=True):
+                st.session_state["reset_pending"] = True
+                st.rerun()
+        else:
+            st.warning("This clears submissions, comments and insights in this browser session.")
+            confirm_col, cancel_col = st.columns(2)
+            if confirm_col.button("Confirm reset", type="primary"):
+                save({"items": [], "log": []})
+                st.session_state.pop("res", None)
+                st.session_state.pop("celebrate", None)
+                st.session_state["reset_pending"] = False
+                st.rerun()
+            if cancel_col.button("Cancel"):
+                st.session_state["reset_pending"] = False
+                st.rerun()
+    else:
+        st.caption("Reset is available to Admin only. Switch the role above to test it.")
+
     st.markdown(ui.privacy_card(), unsafe_allow_html=True)
     st.caption("Sample brand: " + RB["company"])
+    st.caption("Demo roles are for judging only; they are not authenticated accounts.")
 
 # ---------------- header ----------------
 st.markdown(ui.hero(), unsafe_allow_html=True)
@@ -180,7 +220,13 @@ with T[0]:
         final = st.text_area("Edit freely before sending for approval", fixed, height=120,
                              key="final_%s_%d" % (rid, hash(fixed)))
 
-        if st.button("📤 Submit for approval", type="primary"):
+        if role == "Creator":
+            submit_clicked = st.button("📤 Submit for approval", type="primary")
+        else:
+            st.info("Only the Creator role can submit drafts. Switch to Creator to test submission.")
+            submit_clicked = False
+
+        if submit_clicked:
             d = load()
             for i, f in enumerate(F):
                 d["log"].append({"rule": f["rule"], "category": f["category"],
@@ -227,9 +273,18 @@ with T[1]:
                     st.markdown("💬 **%s** (%s, %s) · %s: %s" % (ui.E(c["who"]), c["role"], c["time"], c["action"], ui.E(c["msg"])))
             if role in ("Reviewer", "Manager", "Admin"):
                 msg = st.text_input("Comment for the creator", key="cm" + it["id"])
-                b1, b2, b3 = st.columns(3)
-                for col, label, status in ((b1, "✅ Approve", "Approved"), (b2, "✏️ Request changes", "Changes requested"),
-                                           (b3, "⛔ Reject", "Rejected")):
+                if role == "Reviewer":
+                    decisions = (("✅ Approve", "Approved"), ("✏️ Request changes", "Changes requested"))
+                    st.caption("Reviewer permissions: approve or request changes.")
+                else:
+                    decisions = (("✅ Approve", "Approved"), ("✏️ Request changes", "Changes requested"),
+                                 ("⛔ Reject", "Rejected"))
+                    if role == "Manager":
+                        st.caption("Manager permissions: oversee submissions and approve, request changes or reject.")
+                    else:
+                        st.caption("Admin permissions: full review decisions and session administration.")
+                cols = st.columns(len(decisions))
+                for col, (label, status) in zip(cols, decisions):
                     if col.button(label, key=label + it["id"]):
                         it["status"] = status
                         it["comments"].append({"who": who, "role": role, "time": now(),
@@ -239,31 +294,35 @@ with T[1]:
                             st.session_state["celebrate"] = True
                         st.rerun()
             else:
-                st.caption("🔒 Only Reviewers, Managers and Admins can decide. Change your role in the sidebar.")
+                st.caption("🔒 Creator access is view-only in the approval queue. Switch to Reviewer to make decisions.")
 
 # ---------------- tab 3: insights ----------------
 with T[2]:
-    d = load()
-    log = pd.DataFrame(d["log"])
-    if log.empty:
-        st.markdown(ui.empty("📊", "No insights yet",
-                    "Submit a few reviews, or click 'Demo data' in the sidebar to see repeated mistakes."), unsafe_allow_html=True)
+    if role not in ("Manager", "Admin"):
+        st.info("Insights are available to Manager and Admin roles. Switch roles in the sidebar to view them.")
     else:
-        st.markdown(ui.metric_cards([
-            (sum(len(i["versions"]) for i in d["items"]), "📝 Drafts submitted"),
-            (len(log), "🔎 Issues found"),
-            (sum(1 for i in d["items"] if i["status"] == "Approved"), "✅ Approved items")]), unsafe_allow_html=True)
-        g = log.groupby("rule").agg(hits=("rule", "count"), dismissed=("dismissed", "sum")).reset_index()
-        g["unclear_%"] = (100 * g["dismissed"] / g["hits"]).round(0)
-        c1, c2 = st.columns(2, gap="large")
-        with c1:
-            st.markdown("#### 🔁 Most repeated mistakes (by rule)")
-            st.bar_chart(g.set_index("rule")["hits"], color="#6C5CE7")
-        with c2:
-            st.markdown("#### 🧩 Issues by category")
-            st.bar_chart(log.groupby("category").size(), color="#15AABF")
-        st.markdown("#### 🤔 Rules people keep dismissing (the guideline may be unclear)")
-        st.dataframe(g.sort_values("unclear_%", ascending=False), hide_index=True)
+        d = load()
+        log = pd.DataFrame(d["log"])
+        if log.empty:
+            st.markdown(ui.empty("📊", "No insights yet",
+                        "Submit a few reviews, or click 'Demo data' in the sidebar to see repeated mistakes."), unsafe_allow_html=True)
+        else:
+            st.markdown(ui.metric_cards([
+                (sum(len(i["versions"]) for i in d["items"]), "📝 Drafts submitted"),
+                (len(log), "🔎 Issues found"),
+                (sum(1 for i in d["items"] if i["status"] == "Approved"), "✅ Approved items")]), unsafe_allow_html=True)
+            g = log.groupby("rule").agg(hits=("rule", "count"), dismissed=("dismissed", "sum")).reset_index()
+            g["unclear_%"] = (100 * g["dismissed"] / g["hits"]).round(0)
+            c1, c2 = st.columns(2, gap="large")
+            with c1:
+                st.markdown("#### 🔁 Most repeated mistakes (by rule)")
+                st.bar_chart(g.set_index("rule")["hits"], color="#6C5CE7")
+            with c2:
+                st.markdown("#### 🧩 Issues by category")
+                st.bar_chart(log.groupby("category").size(), color="#15AABF")
+            st.markdown("#### 🤔 Rules people keep dismissing (the guideline may be unclear)")
+            st.dataframe(g.sort_values("unclear_%", ascending=False), hide_index=True)
+
 
 # ---------------- tab 4: rulebook ----------------
 with T[3]:
