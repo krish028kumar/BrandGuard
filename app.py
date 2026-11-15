@@ -13,6 +13,8 @@ import uploads
 import ui
 
 
+# ---------------- page setup ----------------
+
 st.set_page_config(
     page_title="BrandGuard",
     page_icon="🛡️",
@@ -39,7 +41,6 @@ ROLE_ICON = {
     "Admin": "🛠️"
 }
 
-# Streamlit Community Cloud uses temporary container storage.
 SESSION_STORE_KEY = "brandguard_store"
 
 
@@ -302,7 +303,6 @@ with T_review:
             key="doc_up"
         )
 
-        # Identify uploaded documents
         is_document = up_doc is not None
 
         if up_doc is not None:
@@ -348,6 +348,12 @@ with T_review:
             st.session_state.pop("doc_sig", None)
             st.session_state.pop("doc_msg", None)
 
+        # Prevent reviewing an uploaded document if extraction failed.
+        document_error = (
+            is_document
+            and st.session_state.get("doc_msg", ("", ""))[0] != "ok"
+        )
+
         if tkey in st.session_state:
 
             text = st.text_area(
@@ -370,7 +376,7 @@ with T_review:
         if has_key():
 
             use_ai = st.checkbox(
-                "🤖 Run multilingual AI moderation + brand check (OpenAI primary, OpenRouter fallback; sends text externally)",
+                "🤖 Run multilingual AI moderation (marketing: brand governance; documents: safety only)",
                 True
             )
 
@@ -383,7 +389,11 @@ with T_review:
                 "Add OPENAI_API_KEY or OPENROUTER_API_KEY to Streamlit secrets."
             )
 
-        if st.button("🚀 Run review", type="primary"):
+        if st.button(
+            "🚀 Run review",
+            type="primary",
+            disabled=document_error
+        ):
 
             if not text.strip():
 
@@ -391,14 +401,14 @@ with T_review:
 
             else:
 
-                # Documents skip local BrightCart brand checks.
+                # Academic documents skip local BrightKart brand checks.
                 F0 = [] if is_document else review(text, RB)
 
                 ai_status = "rules_only"
                 ai_error = ""
 
                 with st.spinner(
-                    "Running rulebook checks and multilingual AI moderation…"
+                    "Running multilingual AI moderation…"
                     if use_ai
                     else "Checking the local rulebook…"
                 ):
@@ -406,7 +416,6 @@ with T_review:
                     if use_ai:
 
                         try:
-
                             ai_findings = run_ai_check(
                                 text,
                                 RB,
@@ -419,7 +428,6 @@ with T_review:
                             ai_status = "completed"
 
                         except Exception as e:
-
                             ai_status = "unverified"
                             ai_error = str(e)
 
@@ -622,7 +630,7 @@ with T_review:
             )
 
             st.success(
-                "Submitted! Switch your role to Reviewer and open the Approval queue tab."
+                "Submitted! Switch to Reviewer and open the Approval queue tab."
             )
 
 
@@ -674,7 +682,6 @@ with T_image:
                     if has_key():
 
                         try:
-
                             extracted, vf = uploads.vision_review(
                                 data,
                                 RB,
@@ -686,7 +693,6 @@ with T_image:
                             vstatus = "completed"
 
                         except Exception as e:
-
                             vstatus = "unverified"
                             verr = str(e)
 
@@ -754,7 +760,7 @@ with T_image:
         else:
 
             st.warning(
-                "LOCAL-ONLY CHECK — AI image review was not run (no OPENROUTER_API_KEY). No overall Safe result is being claimed."
+                "LOCAL-ONLY CHECK — AI image review was not run (no configured API key). No overall Safe result is being claimed."
             )
 
         if r["extracted"].strip():
@@ -867,7 +873,7 @@ with T_image:
                 )
 
                 st.success(
-                    "Submitted! Switch your role to Reviewer and open the Approval queue tab. "
+                    "Submitted! Switch to Reviewer and open the Approval queue tab. "
                     "(The image itself is not stored.)"
                 )
 
