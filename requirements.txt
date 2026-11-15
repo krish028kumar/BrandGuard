@@ -4,7 +4,6 @@ anthropic
 pypdf
 python-docx
 Pillow
-pypdf
 pytesseract
 pdf2image
 libsql
