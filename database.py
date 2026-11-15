@@ -1,4 +1,3 @@
-
 """
 BrandGuard - Shared Database
 Uses Turso Cloud (SQLite-compatible libSQL).
@@ -96,12 +95,20 @@ def _normalise_data(data):
 # INITIALIZE DATABASE
 # --------------------------------------------------
 
+_INIT_DONE = False
+
+
 def init_db():
     """
     Create the shared storage table if it does not exist.
 
     Existing BrandGuard data is preserved.
     """
+
+    global _INIT_DONE
+
+    if _INIT_DONE:
+        return
 
     conn = get_connection()
 
@@ -138,6 +145,7 @@ def init_db():
         """)
 
         conn.commit()
+        _INIT_DONE = True
 
     finally:
         conn.close()
