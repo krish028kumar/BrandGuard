@@ -639,10 +639,10 @@ with st.sidebar:
                 type="primary"
             ):
                 try:
-                    save({
-                        "items": [],
-                        "log": []
-                    })
+                    _reset = load()
+                    _reset["items"] = []
+                    _reset["log"] = []
+                    save(_reset)
 
                     for key in (
                         "res",
@@ -2160,9 +2160,100 @@ with T_rulebook:
         )
     )
 
-    with st.expander("View raw rulebook (JSON)"):
+    st.markdown("---")
 
-        st.json(RB)
+    st.markdown("#### 💬 Share your feedback")
+
+    st.caption(
+        "Tell us what worked and what to improve. "
+        "Managers and Admins can read the feedback."
+    )
+
+    with st.form("feedback_form", clear_on_submit=True):
+
+        rating = st.select_slider(
+            "How was your experience?",
+            options=[
+                "😞 Poor",
+                "😐 Okay",
+                "🙂 Good",
+                "😄 Great",
+                "🤩 Excellent"
+            ],
+            value="🙂 Good"
+        )
+
+        fb_text = st.text_area(
+            "What worked well? What should we improve?",
+            max_chars=500,
+            height=100
+        )
+
+        fb_sent = st.form_submit_button(
+            "Send feedback",
+            type="primary"
+        )
+
+    if fb_sent:
+
+        if not fb_text.strip():
+
+            st.warning("Please write a short comment first.")
+
+        else:
+
+            try:
+
+                fb_data = load()
+
+                fb_data.setdefault("feedback", [])
+
+                fb_data["feedback"].append({
+                    "who": who,
+                    "role": role,
+                    "rating": rating,
+                    "msg": fb_text.strip()[:500],
+                    "time": now()
+                })
+
+                save(fb_data)
+
+                st.toast("Thank you for your feedback!", icon="💬")
+
+                st.success("Thank you! Your feedback was sent.")
+
+            except Exception as e:
+
+                st.error("Could not send feedback: %s" % e)
+
+    if role in ("Manager", "Admin"):
+
+        try:
+
+            fb_items = load_cached().get("feedback", [])
+
+        except Exception:
+
+            fb_items = []
+
+        st.markdown("**Recent feedback**")
+
+        if not fb_items:
+
+            st.caption("No feedback yet.")
+
+        for fb in reversed(fb_items[-8:]):
+
+            st.markdown(
+                "%s **%s** (%s, %s)  \n%s"
+                % (
+                    ui.E(fb.get("rating", "")),
+                    ui.E(fb.get("who", "Unknown")),
+                    ui.E(fb.get("role", "")),
+                    ui.E(fb.get("time", "")),
+                    ui.E(fb.get("msg", ""))
+                )
+            )
 
 
 # ---------------- footer ----------------
