@@ -19,13 +19,9 @@ The platform provides a centralized review environment where users can submit co
 </p>
 
 <p align="center">
-  <a href="https://brandguard-6xhxmmq8zmnb8cdzmjxmej.streamlit.app/">
-    <strong>🌐 Access the Live Application</strong>
-  </a>
+  <a href="https://brandguard-6xhxmmq8zmnb8cdzmjxmej.streamlit.app/"><strong>🌐 Live Application</strong></a>
   &nbsp; | &nbsp;
-  <a href="https://github.com/krish028kumar/BrandGuard">
-    <strong>💻 GitHub Repository</strong>
-  </a>
+  <a href="https://github.com/krish028kumar/BrandGuard"><strong>💻 GitHub Repository</strong></a>
 </p>
 
 ---
@@ -33,32 +29,33 @@ The platform provides a centralized review environment where users can submit co
 ## ✨ Key Features
 
 ### 1. AI-Powered Content Moderation
-
-- Analyzes submitted content using AI.
+- Analyzes submitted content using an AI-powered verification system.
 - Identifies potentially harmful or inappropriate content.
 - Provides moderation and verification results.
-- Distinguishes verified results from incomplete or unverified AI checks.
-- Prevents failed AI verification from being automatically classified as safe.
+- Distinguishes verified results from incomplete or unsuccessful AI checks.
+- Prevents failed AI verification from being automatically classified as safe or approved.
 
 ### 2. Brand Compliance Checking
-
 - Validates content against predefined brand guidelines.
 - Detects tone-of-voice inconsistencies.
 - Checks approved terminology and brand language.
-- Identifies violations of approved brand facts.
-- Helps maintain consistent brand communication.
+- Identifies potential violations of approved brand facts.
+- Provides findings to help maintain consistent brand communication.
 
-### 3. Document Upload & Analysis
-
+### 3. Document Upload and Analysis
 - Supports document uploads, including PDF files.
-- Extracts text from uploaded documents for compliance checking.
-- Analyzes extracted content against predefined brand rules.
-- Identifies potential compliance issues in documents.
+- Extracts text from supported documents.
+- Evaluates extracted content against predefined brand rules.
+- Identifies potential compliance issues in uploaded documents.
 
-### 4. Automated Review & Correction
+### 4. Image Analysis
+- Provides an image-analysis workflow through the image analysis module.
+- Supports visual content assessment where implemented in the application.
+- Helps extend brand compliance review beyond text-only submissions.
 
+### 5. Automated Review and Correction
 - Generates findings based on detected violations.
-- Categorizes findings according to severity:
+- Categorizes findings by severity:
   - Critical
   - High
   - Medium
@@ -67,38 +64,39 @@ The platform provides a centralized review environment where users can submit co
 - Supports before-and-after content comparison.
 - Helps streamline the content review process.
 
-### 5. Review & Approval Workflow
+### 6. Evidence and Verification
+- Includes an evidence-processing component for supporting content verification.
+- Uses available brand rules and supporting information during review.
+- Helps make compliance findings more explainable.
+- AI-generated findings remain subject to verification and human review.
+
+### 7. Review and Approval Workflow
 
 Supports multiple application roles:
-
 - Admin
 - Manager
 - Reviewer
 - Creator
 
 Additional capabilities:
-
 - Maintains submission history and revisions.
 - Supports reviewer comments.
 - Tracks approval status and review progress.
 - Provides a structured content review workflow.
 
-### 6. Feedback Management
-
+### 8. Feedback Management
 - Allows users to submit platform feedback.
 - Supports ratings and written comments.
-- Enables Admin and Manager to view recent feedback.
-- Maintains feedback records for internal product improvement.
+- Enables authorized roles to view feedback.
+- Maintains feedback records for product improvement.
 
-### 7. Insights & Reporting
-
+### 9. Insights and Reporting
 - Maintains records of compliance findings.
 - Tracks review activity.
 - Provides visibility into submissions and compliance-related insights.
 - Helps monitor recurring content issues.
 
-### 8. Rulebook Management
-
+### 10. Rulebook Management
 - Maintains centralized brand guidelines.
 - Organizes tone, terminology, and approved facts.
 - Uses structured rules for consistent content evaluation.
@@ -112,10 +110,11 @@ Additional capabilities:
 |---|---|
 | Python | Core programming language |
 | Streamlit | Interactive web application |
-| OpenRouter API | AI-powered content analysis |
+| Google Gemini API | AI-powered content analysis, where configured |
+| OpenRouter API | AI API integration, where configured |
 | Pandas | Data processing |
 | Turso Database | Cloud database storage |
-| SQLite / libSQL | Database compatibility |
+| SQLite / libSQL | Database connectivity |
 | HTML | UI components |
 | CSS | Interface styling |
 | Git | Version control |
@@ -133,15 +132,21 @@ BrandGuard/
 │
 ├── ai_check.py         # AI-powered content verification
 │
+├── engine.py           # Rulebook validation and review engine
+│
 ├── uploads.py          # Document upload and text extraction
 │
-├── database.py         # Database operations
+├── image_analysis.py   # Image analysis functionality
 │
-├── engine.py           # Rulebook validation and review engine
+├── evidence.py         # Evidence processing and verification
+│
+├── database.py         # Database operations
 │
 ├── ui.py               # Shared UI components and styling
 │
 ├── requirements.txt    # Project dependencies
+│
+├── .streamlit/         # Streamlit configuration and secrets setup
 │
 ├── .gitignore          # Git ignored files
 │
@@ -151,53 +156,50 @@ BrandGuard/
 ### Application Workflow
 
 ```text
-          User Submission
-                 |
-                 v
-       Content / Document Upload
-                 |
-                 v
-          Text Extraction
-                 |
-                 v
-       +---------------------+
-       |   Review Engine     |
-       +---------------------+
-                 |
-          +------+------+
-          |             |
-          v             v
-    Rule-Based       AI-Powered
-    Validation       Moderation
-          |             |
-          +------+------+
-                 |
-                 v
-        Findings & Severity
-                 |
-                 v
-       Suggested Corrections
-                 |
-                 v
-       Review & Approval
-                 |
-                 v
-        Database Storage
-                 |
-                 v
-       Insights & Reporting
+             User Submission
+                    |
+                    v
+        Content / Document / Image
+                    |
+                    v
+          Input Processing
+                    |
+                    v
+          Review Engine
+                    |
+           +--------+--------+
+           |                 |
+           v                 v
+      Rule-Based         AI-Powered
+      Validation         Verification
+           |                 |
+           +--------+--------+
+                    |
+                    v
+          Findings and Severity
+                    |
+                    v
+          Suggested Corrections
+                    |
+                    v
+          Review and Approval
+                    |
+                    v
+            Database Storage
+                    |
+                    v
+           Insights and Reporting
 ```
 
 ---
 
-## ⚙️ Installation & Setup
+## ⚙️ Installation and Setup
 
 ### Prerequisites
-
 - Python 3.10 or later
 - Git
-- OpenRouter API credentials
-- Turso database credentials
+- Required AI API credentials
+- Turso database credentials, if using the cloud database configuration
 
 ### Step 1: Clone the repository
 
@@ -220,13 +222,11 @@ python -m venv venv
 Activate the environment:
 
 **Windows:**
-
 ```bash
 venv\Scripts\activate
 ```
 
 **Linux / macOS:**
-
 ```bash
 source venv/bin/activate
 ```
@@ -239,19 +239,21 @@ pip install -r requirements.txt
 
 ### Step 5: Configure application secrets
 
-Configure the required API and database credentials using Streamlit secrets.
+Configure the API and database credentials through Streamlit secrets.
 
-Example configuration:
+The variable names must match those read by the application's configuration and AI modules.
+
+Example:
 
 ```toml
-OPENROUTER_API_KEY = "your_api_key"
+GEMINI_API_KEY = "your_gemini_api_key"
 TURSO_DATABASE_URL = "your_database_url"
 TURSO_AUTH_TOKEN = "your_auth_token"
 ```
 
-Use the exact variable names expected by the application code.
+If your active deployment uses OpenRouter, configure the exact OpenRouter secret name expected by `ai_check.py` instead.
 
-**Important:** Never commit actual API keys, authentication tokens, or database credentials to GitHub.
+**Important:** Never commit API keys, authentication tokens, or database credentials to GitHub.
 
 ### Step 6: Run the application locally
 
@@ -259,11 +261,7 @@ Use the exact variable names expected by the application code.
 streamlit run app.py
 ```
 
-The application will run locally for development and testing.
-
-To access the publicly deployed application, visit:
-
-**[Launch BrandGuard – Live Application](https://brandguard-6xhxmmq8zmnb8cdzmjxmej.streamlit.app/)**
+The application will be available locally through the Streamlit development server.
 
 ---
 
@@ -288,9 +286,7 @@ BrandGuard is deployed using **Streamlit Community Cloud**.
 </p>
 
 <p align="center">
-  <a href="https://brandguard-6xhxmmq8zmnb8cdzmjxmej.streamlit.app/">
-    <strong>Open BrandGuard</strong>
-  </a>
+  <a href="https://brandguard-6xhxmmq8zmnb8cdzmjxmej.streamlit.app/"><strong>🚀 Open BrandGuard</strong></a>
 </p>
 
 ---
@@ -299,9 +295,9 @@ BrandGuard is deployed using **Streamlit Community Cloud**.
 
 - Store API keys and database credentials securely.
 - Never expose authentication tokens in source code.
+- Use role-based access controls for administrative operations.
 - Treat AI-generated moderation results as decision-support information.
-- An incomplete AI verification must not be interpreted as a safe result.
-- Apply appropriate access controls to administrative operations and user data.
+- An incomplete AI verification must not be interpreted as a safe or approved result.
 - Keep sensitive configuration files out of version control.
 
 ---
@@ -310,15 +306,29 @@ BrandGuard is deployed using **Streamlit Community Cloud**.
 
 The primary objective of BrandGuard is to simplify brand compliance and content moderation through automation.
 
-By combining rule-based validation, AI-powered analysis, document processing, and structured approval workflows, BrandGuard aims to:
+By combining rule-based validation, AI-powered analysis, document processing, image analysis, and structured approval workflows, BrandGuard aims to:
 
 - Reduce manual content review effort.
 - Improve brand consistency across digital communications.
 - Identify potentially harmful and non-compliant content.
 - Standardize content review and approval processes.
 - Provide actionable findings and correction suggestions.
+- Support more consistent and explainable content verification.
 
 BrandGuard brings content safety, brand governance, and automated review capabilities together in one platform.
+
+---
+
+## 🚀 Future Scope
+
+Planned areas for further development include:
+
+- More comprehensive computer-vision-based logo and visual guideline verification.
+- Improved evidence retrieval and source-level traceability.
+- Advanced compliance analytics and recurring violation insights.
+- More comprehensive rulebook version management.
+- Enhanced reviewer collaboration and governance capabilities.
+- Expanded accessibility and visual consistency checks.
 
 ---
 
@@ -333,8 +343,6 @@ Bengaluru, Karnataka, India
 **Academic Batch:** 2024–2028
 
 Interested in software engineering, artificial intelligence, problem-solving, and building practical technology solutions.
-
-Currently focused on strengthening skills in Data Structures and Algorithms, software development, and AI-powered applications.
 
 **GitHub Profile:** [krish028kumar](https://github.com/krish028kumar)
 
