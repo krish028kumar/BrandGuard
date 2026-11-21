@@ -9,6 +9,7 @@ Contains:
 - Finding cards
 - Highlighted draft rendering
 - Approval status badges
+- AI verification banners
 - Workflow success and notification components
 
 No Streamlit import.
@@ -56,14 +57,12 @@ def E(value):
 
 
 def _severity(value):
-    """Return a supported severity."""
-    value = str(value or DEFAULT_SEVERITY)
+    value = str(value or DEFAULT_SEVERITY).strip().title()
     return value if value in SEV else DEFAULT_SEVERITY
 
 
 def _category(value):
-    """Return a supported category."""
-    value = str(value or "Safety")
+    value = str(value or "Safety").strip().title()
     return value if value in ICON else "Safety"
 
 
@@ -85,15 +84,8 @@ html, body, .stApp, button, input, textarea {
     font-family: 'Inter', sans-serif;
 }
 
-/* Main application */
-
 .stApp {
-    background: linear-gradient(
-        160deg,
-        #F6F4FF 0%,
-        #EEF6FF 55%,
-        #F3FFFB 100%
-    );
+    background: linear-gradient(160deg,#F6F4FF 0%,#EEF6FF 55%,#F3FFFB 100%);
 }
 
 .block-container {
@@ -106,8 +98,6 @@ html, body, .stApp, button, input, textarea {
     border-right: 1px solid #ECE9FF;
 }
 
-/* ---------------- NO BLUR / NO FADE ---------------- */
-
 .stApp,
 [data-testid="stApp"],
 [data-testid="stAppViewContainer"],
@@ -117,39 +107,20 @@ html, body, .stApp, button, input, textarea {
 [data-testid="stVerticalBlock"],
 [data-testid="stHorizontalBlock"] {
     filter: none !important;
-    -webkit-filter: none !important;
     opacity: 1 !important;
 }
-
-/* Remove backdrop blur and visual overlays */
 
 [data-testid="stAppViewContainer"]::before,
 [data-testid="stAppViewContainer"]::after,
 [data-testid="stMain"]::before,
 [data-testid="stMain"]::after {
     backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
 }
-
-/* Keep Streamlit content readable during interactions */
-
-[data-testid="stAppViewContainer"] [data-testid="stAppViewBlockContainer"] {
-    filter: none !important;
-    opacity: 1 !important;
-}
-
-/* ---------------- animations ---------------- */
 
 @keyframes float {
-    0%, 100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-8px);
-    }
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
 }
-
-/* ---------------- hero ---------------- */
 
 .hero {
     position: relative;
@@ -157,12 +128,7 @@ html, body, .stApp, button, input, textarea {
     border-radius: 24px;
     padding: 28px 34px;
     color: #fff;
-    background: linear-gradient(
-        120deg,
-        #6C5CE7 0%,
-        #4C6EF5 55%,
-        #15AABF 100%
-    );
+    background: linear-gradient(120deg,#6C5CE7 0%,#4C6EF5 55%,#15AABF 100%);
     box-shadow: 0 18px 40px rgba(76,110,245,.20);
 }
 
@@ -224,41 +190,6 @@ html, body, .stApp, button, input, textarea {
     bottom: -60px;
 }
 
-/* ---------------- steps ---------------- */
-
-.steps {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    margin: 16px 0 10px;
-}
-
-.step {
-    background: #fff;
-    border-radius: 16px;
-    padding: 12px 14px;
-    box-shadow: 0 6px 18px rgba(30,27,75,.07);
-    display: flex;
-    gap: 10px;
-    align-items: center;
-}
-
-.step b {
-    display: block;
-    color: #1E1B4B;
-    font-size: .88rem;
-}
-
-.step small {
-    color: #6B6890;
-}
-
-.step .n {
-    font-size: 1.6rem;
-}
-
-/* ---------------- tabs ---------------- */
-
 .stTabs [data-baseweb="tab-list"] {
     gap: 6px;
     background: #fff;
@@ -274,11 +205,7 @@ html, body, .stApp, button, input, textarea {
 }
 
 .stTabs [aria-selected="true"] {
-    background: linear-gradient(
-        120deg,
-        #6C5CE7,
-        #4C6EF5
-    );
+    background: linear-gradient(120deg,#6C5CE7,#4C6EF5);
 }
 
 .stTabs [aria-selected="true"] p {
@@ -290,17 +217,11 @@ html, body, .stApp, button, input, textarea {
     display: none;
 }
 
-/* ---------------- buttons ---------------- */
-
 .stButton > button {
     border-radius: 12px !important;
     font-weight: 700 !important;
     border: 1px solid #D9D4FF !important;
-    transition:
-        background-color .12s ease,
-        border-color .12s ease,
-        box-shadow .12s ease,
-        color .12s ease !important;
+    transition: background-color .12s ease,border-color .12s ease,box-shadow .12s ease !important;
     transform: none !important;
     filter: none !important;
     opacity: 1 !important;
@@ -310,54 +231,31 @@ html, body, .stApp, button, input, textarea {
 .stButton > button:hover:not(:disabled) {
     border-color: #6C5CE7 !important;
     box-shadow: 0 3px 10px rgba(108,92,231,.18) !important;
-    transform: none !important;
-    filter: none !important;
-    opacity: 1 !important;
 }
 
 .stButton > button:active:not(:disabled) {
     background-color: #E7E5FF !important;
     border-color: #4C3FB5 !important;
     box-shadow: inset 0 2px 4px rgba(30,27,75,.15) !important;
-    transform: none !important;
 }
 
 .stButton > button:focus,
 .stButton > button:focus-visible {
     outline: 3px solid rgba(108,92,231,.35) !important;
     outline-offset: 2px !important;
-    filter: none !important;
 }
 
 .stButton > button[kind="primary"],
 .stButton > button[data-testid="stBaseButton-primary"] {
-    background: linear-gradient(
-        120deg,
-        #6C5CE7,
-        #4C6EF5
-    ) !important;
+    background: linear-gradient(120deg,#6C5CE7,#4C6EF5) !important;
     color: #fff !important;
     border: none !important;
-}
-
-.stButton > button[kind="primary"]:hover:not(:disabled),
-.stButton > button[data-testid="stBaseButton-primary"]:hover:not(:disabled) {
-    background: linear-gradient(
-        120deg,
-        #5948D6,
-        #3559E8
-    ) !important;
-    box-shadow: 0 4px 12px rgba(76,110,245,.28) !important;
 }
 
 .stButton > button:disabled {
     opacity: .55 !important;
     cursor: not-allowed !important;
-    transform: none !important;
-    box-shadow: none !important;
 }
-
-/* Inputs */
 
 .stTextArea textarea,
 .stTextInput input {
@@ -368,7 +266,8 @@ html, body, .stApp, button, input, textarea {
 
 .workflow-success,
 .workflow-revision,
-.workflow-submitted {
+.workflow-submitted,
+.workflow-rejected {
     display: flex;
     align-items: center;
     gap: 14px;
@@ -378,55 +277,97 @@ html, body, .stApp, button, input, textarea {
 }
 
 .workflow-success {
-    background: linear-gradient(120deg, #E6FCF5, #D3F9D8);
+    background: linear-gradient(120deg,#E6FCF5,#D3F9D8);
     border: 1px solid #8CE99A;
     color: #087F5B;
 }
 
 .workflow-revision {
-    background: linear-gradient(120deg, #FFF4E6, #FFF0DB);
+    background: linear-gradient(120deg,#FFF4E6,#FFF0DB);
     border: 1px solid #FFC078;
     border-left: 6px solid #F08C00;
     color: #A65300;
 }
 
 .workflow-submitted {
-    background: linear-gradient(120deg, #F3F0FF, #E7E5FF);
+    background: linear-gradient(120deg,#F3F0FF,#E7E5FF);
     border: 1px solid #B197FC;
     color: #5F3DC4;
 }
 
+.workflow-rejected {
+    background: linear-gradient(120deg,#FFF0F0,#FFE3E3);
+    border: 1px solid #FFA8A8;
+    color: #C92A2A;
+}
+
 .workflow-success .feedback-icon,
 .workflow-revision .feedback-icon,
-.workflow-submitted .feedback-icon {
+.workflow-submitted .feedback-icon,
+.workflow-rejected .feedback-icon {
     font-size: 2.2rem;
     flex-shrink: 0;
 }
 
 .workflow-success .feedback-title,
 .workflow-revision .feedback-title,
-.workflow-submitted .feedback-title {
+.workflow-submitted .feedback-title,
+.workflow-rejected .feedback-title {
     font-size: 1.05rem;
     font-weight: 800;
 }
 
 .workflow-success .feedback-message,
 .workflow-revision .feedback-message,
-.workflow-submitted .feedback-message {
+.workflow-submitted .feedback-message,
+.workflow-rejected .feedback-message {
     font-size: .88rem;
     margin-top: 3px;
 }
 
-.workflow-success .feedback-message {
+/* ---------------- AI verification banners ---------------- */
+
+.ai-banner {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 15px 19px;
+    border-radius: 16px;
+    margin: 12px 0 18px;
+    font-weight: 700;
+}
+
+.ai-banner .ai-icon {
+    font-size: 1.8rem;
+}
+
+.ai-banner .ai-title {
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.ai-banner .ai-description {
+    font-size: .83rem;
+    font-weight: 500;
+    margin-top: 3px;
+}
+
+.ai-completed {
+    background: #E6FCF5;
+    border: 1px solid #8CE99A;
     color: #087F5B;
 }
 
-.workflow-revision .feedback-message {
-    color: #A65300;
+.ai-unverified {
+    background: #FFF0F0;
+    border: 1px solid #FFA8A8;
+    color: #C92A2A;
 }
 
-.workflow-submitted .feedback-message {
-    color: #5F3DC4;
+.ai-local {
+    background: #FFF4E6;
+    border: 1px solid #FFC078;
+    color: #A65300;
 }
 
 /* ---------------- score card ---------------- */
@@ -450,10 +391,7 @@ html, body, .stApp, button, input, textarea {
     flex: none;
     display: grid;
     place-items: center;
-    background: conic-gradient(
-        var(--c) calc(var(--p) * 1%),
-        #E9E6FB 0
-    );
+    background: conic-gradient(var(--c) calc(var(--p) * 1%),#E9E6FB 0);
 }
 
 .ring::before {
@@ -618,6 +556,7 @@ mark.hl-low {
     border-left: 6px solid var(--s);
     box-shadow: 0 6px 18px rgba(30,27,75,.07);
     color: #1E1B4B;
+    margin: 10px 0;
 }
 
 .fhead {
@@ -665,11 +604,44 @@ mark.hl-low {
     font-size: .86rem;
 }
 
+/* ---------------- evidence labels ---------------- */
+
+.evidence-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    margin-top: 9px;
+    font-size: .76rem;
+    font-weight: 800;
+}
+
+.evidence-verified {
+    background: #D3F9D8;
+    color: #2B8A3E;
+}
+
+.evidence-unsupported {
+    background: #FFF3BF;
+    color: #B35C00;
+}
+
+.evidence-ai {
+    background: #E7E5FF;
+    color: #5F3DC4;
+}
+
+.evidence-unverified {
+    background: #FFE3E3;
+    color: #C92A2A;
+}
+
 /* ---------------- metric cards ---------------- */
 
 .mgrid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3,1fr);
     gap: 12px;
     margin-bottom: 14px;
 }
@@ -693,8 +665,6 @@ mark.hl-low {
     font-size: .85rem;
 }
 
-/* ---------------- empty state ---------------- */
-
 .empty {
     text-align: center;
     padding: 34px;
@@ -708,12 +678,10 @@ mark.hl-low {
     display: inline-block;
 }
 
-/* ---------------- profile card ---------------- */
-
 .pcard {
     border-radius: 16px;
     padding: 14px;
-    background: linear-gradient(135deg, #6C5CE7, #4C6EF5);
+    background: linear-gradient(135deg,#6C5CE7,#4C6EF5);
     color: #fff;
     margin: 8px 0 12px;
 }
@@ -726,8 +694,6 @@ mark.hl-low {
     opacity: .85;
 }
 
-/* ---------------- privacy card ---------------- */
-
 .privacy {
     background: #F3FFFB;
     border: 1px solid #B2F2E4;
@@ -738,14 +704,10 @@ mark.hl-low {
     margin-top: 10px;
 }
 
-/* ---------------- diff ---------------- */
-
 .diffbox {
     line-height: 1.95;
     color: #1E1B4B;
 }
-
-/* ---------------- footer ---------------- */
 
 .foot {
     text-align: center;
@@ -754,38 +716,16 @@ mark.hl-low {
     margin: 26px 0 6px;
 }
 
-/* ---------------- responsive layout ---------------- */
-
-@media (max-width: 760px) {
-    .hero {
-        padding: 22px;
-    }
-
-    .hero .logo {
-        font-size: 1.6rem;
-    }
-
-    .mascot {
-        font-size: 2.8rem;
-    }
-
-    .steps {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .mgrid {
-        grid-template-columns: 1fr;
-    }
-
-    .score {
-        flex-wrap: wrap;
-    }
-
+@media (max-width:760px) {
+    .hero { padding: 22px; }
+    .hero .logo { font-size: 1.6rem; }
+    .mascot { font-size: 2.8rem; }
+    .mgrid { grid-template-columns: 1fr; }
+    .score { flex-wrap: wrap; }
     .workflow-success,
     .workflow-revision,
-    .workflow-submitted {
-        padding: 14px;
-    }
+    .workflow-submitted,
+    .workflow-rejected { padding: 14px; }
 }
 
 </style>
@@ -844,10 +784,8 @@ def mood(s):
 def color_of(s):
     if s >= 80:
         return "#12B886"
-
     if s >= 50:
         return "#F59F00"
-
     return "#FF6B6B"
 
 
@@ -861,9 +799,7 @@ def hero():
         '<div class="hero-in">'
         '<div>'
         '<div class="logo">🛡️ BrandGuard</div>'
-        '<div class="tag">'
-        'Catch off-brand content before the world does.'
-        '</div>'
+        '<div class="tag">Catch off-brand content before the world does.</div>'
         '<div class="pills">'
         '<span>🔍 Explainable findings</span>'
         '<span>🧑‍⚖️ Humans decide</span>'
@@ -957,6 +893,58 @@ def score_card(F):
     )
 
 
+# ---------------- AI verification banner ----------------
+
+def ai_status_banner(status, error=""):
+    """
+    Display AI verification state.
+
+    A failed or unknown status is always UNVERIFIED.
+    """
+    status = str(status or "").strip().lower()
+
+    if status in ("completed", "success", "passed"):
+        return (
+            '<div class="ai-banner ai-completed">'
+            '<span class="ai-icon">✅</span>'
+            '<div>'
+            '<div class="ai-title">AI verification completed</div>'
+            '<div class="ai-description">'
+            'AI analysis ran successfully. Findings still require human review.'
+            '</div>'
+            '</div>'
+            '</div>'
+        )
+
+    if status in ("local-only", "local_only", "skipped"):
+        return (
+            '<div class="ai-banner ai-local">'
+            '<span class="ai-icon">⚠️</span>'
+            '<div>'
+            '<div class="ai-title">LOCAL-ONLY CHECK</div>'
+            '<div class="ai-description">'
+            'AI verification was not completed. This is not a verified Safe result.'
+            '</div>'
+            '</div>'
+            '</div>'
+        )
+
+    error_text = E(str(error or "AI verification did not complete.")[:400])
+
+    return (
+        '<div class="ai-banner ai-unverified">'
+        '<span class="ai-icon">🚫</span>'
+        '<div>'
+        '<div class="ai-title">UNVERIFIED — AI verification failed</div>'
+        '<div class="ai-description">'
+        'This result must not be treated as Safe or Approved. '
+        '%s'
+        '</div>'
+        '</div>'
+        '</div>'
+    ) % error_text
+
+
 # ---------------- highlighted draft ----------------
 
 def annotate(text, F):
@@ -1019,6 +1007,60 @@ def annotate(text, F):
     )
 
 
+# ---------------- evidence label ----------------
+
+def evidence_label(f):
+    """Display the evidence verification state for a finding."""
+    if not isinstance(f, dict):
+        f = {}
+
+    verification = str(
+        f.get("verification", f.get("evidence_status", ""))
+    ).strip().lower().replace("-", "_").replace(" ", "_")
+
+    source = str(f.get("source", "")).strip().lower()
+    category = str(f.get("category", "")).strip().lower()
+
+    if verification in (
+        "verified",
+        "evidence_verified",
+        "supported",
+        "grounded"
+    ):
+        cls = "evidence-verified"
+        icon = "✅"
+        label = "Verified evidence"
+
+    elif verification in (
+        "unsupported",
+        "unsupported_claim",
+        "unverified_claim",
+        "not_supported"
+    ):
+        cls = "evidence-unsupported"
+        icon = "⚠️"
+        label = "Unsupported claim"
+
+    elif (
+        "ai" in source
+        or "safety" in category
+        or verification in ("ai_safety", "safety_check")
+    ):
+        cls = "evidence-ai"
+        icon = "🤖"
+        label = "AI safety finding"
+
+    else:
+        cls = "evidence-unverified"
+        icon = "❔"
+        label = "Evidence not verified"
+
+    return (
+        '<div><span class="evidence-label %s">%s %s</span></div>'
+        % (cls, icon, E(label))
+    )
+
+
 # ---------------- finding card ----------------
 
 def finding_card(f):
@@ -1028,17 +1070,22 @@ def finding_card(f):
     severity = _severity(f.get("severity"))
     category = _category(f.get("category"))
 
-    rule = E(f.get("rule", "Unknown rule"))
-    quote = E(f.get("text", ""))
-    why = E(f.get("why", ""))
+    rule = E(f.get("rule", f.get("rule_id", "Unknown rule")))
+    quote = E(f.get("text", f.get("flagged_text", "")))
+    why = E(f.get("why", f.get("message", f.get("description", ""))))
     source = E(f.get("source", "Rulebook / AI review"))
     confidence = E(f.get("confidence", "Not specified"))
-    suggestion = E(f.get("suggestion", "Human verification required."))
+    suggestion = E(
+        f.get(
+            "suggestion",
+            f.get("recommendation", "Human verification required.")
+        )
+    )
 
     icon = ICON.get(category, "🔎")
     severity_color = SEV.get(severity, SEV["Low"])
 
-    return (
+    card = (
         '<div class="fcard" style="--s:%s">'
         '<div class="fhead">'
         '<span class="ic">%s</span>'
@@ -1051,20 +1098,21 @@ def finding_card(f):
         '<div class="fmeta">📚 %s &nbsp;·&nbsp; 🎯 %s</div>'
         '<div class="fsug">💡 %s</div>'
         '</div>'
-        % (
-            severity_color,
-            icon,
-            category,
-            rule,
-            severity.lower(),
-            severity,
-            quote,
-            why,
-            source,
-            confidence,
-            suggestion
-        )
+    ) % (
+        severity_color,
+        icon,
+        E(category),
+        rule,
+        severity.lower(),
+        E(severity),
+        quote,
+        why,
+        source,
+        confidence,
+        suggestion
     )
+
+    return card + evidence_label(f)
 
 
 # ---------------- generic panel ----------------
@@ -1100,31 +1148,47 @@ def metric_cards(items):
 # ---------------- approval status badge ----------------
 
 def status_chip(status):
-    status = str(status or "Pending review")
+    """Support both stored and display versions of approval statuses."""
+    original = str(status or "Pending").strip()
+    normalized = original.lower().replace("_", " ")
 
-    cls = {
-        "Approved": "st-approved",
-        "Rejected": "st-rejected",
-        "Changes requested": "st-changes",
-        "Pending review": "st-pending"
-    }.get(status, "st-pending")
+    if normalized in ("approved",):
+        key = "Approved"
+        cls = "st-approved"
+        icon = "✅"
+        label = "Approved"
 
-    icon = {
-        "Approved": "✅",
-        "Rejected": "⛔",
-        "Changes requested": "✏️",
-        "Pending review": "⏳"
-    }.get(status, "⏳")
+    elif normalized in ("rejected",):
+        key = "Rejected"
+        cls = "st-rejected"
+        icon = "⛔"
+        label = "Rejected"
+
+    elif normalized in (
+        "changes requested",
+        "changes request",
+        "revision requested"
+    ):
+        key = "Changes Requested"
+        cls = "st-changes"
+        icon = "✏️"
+        label = "Changes requested"
+
+    else:
+        key = "Pending"
+        cls = "st-pending"
+        icon = "⏳"
+        label = "Pending"
 
     return (
         '<span class="chip %s">%s %s</span>'
-        % (cls, icon, E(status))
+        % (cls, icon, E(label))
     )
 
 
 # ---------------- workflow feedback components ----------------
 
-def submission_success(message="Your submission has been sent for review."):
+def submission_success(message="Submitted, status: Pending review"):
     """Creator submission confirmation."""
     return (
         '<div class="workflow-submitted">'
@@ -1144,7 +1208,7 @@ def approval_success(message="The content has been approved successfully."):
         '<div class="workflow-success">'
         '<span class="feedback-icon">🎊</span>'
         '<div>'
-        '<div class="feedback-title">Approved successfully!</div>'
+        '<div class="feedback-title">Approved!</div>'
         '<div class="feedback-message">%s</div>'
         '</div>'
         '</div>'
@@ -1159,6 +1223,20 @@ def revision_requested(message="The creator can now review the feedback and make
         '<span class="feedback-icon">📝</span>'
         '<div>'
         '<div class="feedback-title">Changes requested</div>'
+        '<div class="feedback-message">%s</div>'
+        '</div>'
+        '</div>'
+        % E(message)
+    )
+
+
+def rejection_success(message="This submission has been rejected."):
+    """Manager rejection confirmation."""
+    return (
+        '<div class="workflow-rejected">'
+        '<span class="feedback-icon">⛔</span>'
+        '<div>'
+        '<div class="feedback-title">Rejected</div>'
         '<div class="feedback-message">%s</div>'
         '</div>'
         '</div>'
