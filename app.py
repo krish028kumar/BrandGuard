@@ -9,6 +9,7 @@ import streamlit as st
 import database
 from engine import load_rulebook, review, apply_fixes, diff_html, merge_findings
 from ai_check import run_ai_check
+import evidence
 import uploads
 import ui
 
@@ -29,17 +30,6 @@ st.markdown(ui.CSS, unsafe_allow_html=True)
 st.markdown(
     """
     <style>
-    /* Streamlit dims "stale" elements while a click is processing. Disable that fade. */
-    [data-stale="true"],
-    [data-stale="true"] *,
-    .stApp [data-testid="stElementContainer"][data-stale],
-    .stApp[data-teststate="running"] [data-testid="stVerticalBlock"] > div {
-        opacity: 1 !important;
-        filter: none !important;
-        -webkit-filter: none !important;
-        transition: none !important;
-    }
-
     /* Main application must remain interactive. */
     [data-testid="stAppViewContainer"],
     [data-testid="stMain"],
@@ -205,61 +195,10 @@ def save(data):
         raise ValueError("Invalid insights data.")
 
     database.save_data(data)
-    load_cached.clear()
-
-
-@st.cache_data(ttl=5, show_spinner=False)
-def load_cached():
-    """Short-lived cached copy for display only. Writes always use load()."""
-
-    return load()
-
-
-def open_tab(label_text):
-    """Switch the page to the tab whose title contains label_text."""
-
-    try:
-      st.components.v1.html(
-        "<script>setTimeout(function(){"
-        "var t=window.parent.document.querySelectorAll('button[role=\"tab\"]');"
-        "for(var i=0;i<t.length;i++){"
-        "if(t[i].innerText.indexOf('LABEL')>-1){t[i].click();break;}}"
-        "},400);</script>".replace("LABEL", label_text),
-        height=0
-      )
-    except Exception:
-        pass
 
 
 def now():
     return time.strftime("%Y-%m-%d %H:%M")
-
-
-POPPER_HTML = (
-    "<style>"
-    "@keyframes bgpop{0%{transform:translate(0,0) scale(.4);opacity:1}"
-    "100%{transform:translate(var(--x),var(--y)) scale(1.4) rotate(360deg);opacity:0}}"
-    ".bgpop{position:fixed;bottom:12vh;font-size:2rem;pointer-events:none;"
-    "z-index:99999;opacity:0;animation:bgpop 1.6s ease-out forwards}"
-    "</style>"
-)
-_POP_ITEMS = [
-    ("🎉", "-35vw", "-55vh", "left:50%"), ("🎊", "35vw", "-60vh", "left:50%"),
-    ("🎉", "-20vw", "-70vh", "left:50%"), ("🎊", "20vw", "-65vh", "left:50%"),
-    ("✨", "-45vw", "-45vh", "left:50%"), ("✨", "45vw", "-50vh", "left:50%"),
-    ("🎉", "-5vw", "-75vh", "left:50%"), ("🎊", "8vw", "-72vh", "left:50%"),
-]
-
-
-def party_poppers():
-    """Confetti burst (CSS only). Pure string concat: no % formatting."""
-    parts = [POPPER_HTML]
-    for emoji, x, y, pos in _POP_ITEMS:
-        parts.append(
-            '<span class="bgpop" style="' + pos + ';--x:' + x + ';--y:' + y + '">'
-            + emoji + "</span>"
-        )
-    st.markdown("".join(parts), unsafe_allow_html=True)
 
 
 def new_id():
@@ -309,8 +248,7 @@ def _setting(name, default=""):
 
 def api_key():
     return (
-        _setting("GEMINI_API_KEY")
-        or _setting("OPENAI_API_KEY")
+        _setting("OPENAI_API_KEY")
         or _setting("OPENROUTER_API_KEY")
     )
 
@@ -385,9 +323,8 @@ def latest_ai_status(item):
         )
     ).lower()
 
-
-def is_ai_unverified(item):
-    return latest_ai_status(item) == "unverified"
+def is_ai_approval_ready(item):
+    return latest_ai_status(item) == "completed"
 
 
 def image_draft_id(author, filename, size):
@@ -507,47 +444,43 @@ def seed():
     return added
 
 
-# ---------------- welcome: ask for a name first ----------------
+# ---------------- celebration helpers ----------------
 
-if not st.session_state.get("user_name"):
+def party_poppers():
+    """A short burst of party poppers. Pure CSS, never blocks clicks."""
 
-    st.markdown(ui.hero(), unsafe_allow_html=True)
+    emojis = ["🎉", "🎊", "✨", "🎉", "🥳", "🎊", "✨", "🎉"]
+    lefts = [6, 14, 22, 31, 40, 49, 58, 66, 74, 82, 90, 96]
+    spans = []
 
-    _l, _c, _r = st.columns([1, 2, 1])
-
-    with _c:
-
-        st.markdown("### 👋 Welcome to BrandGuard")
-
-        st.caption(
-            "Enter your name to get started. Your drafts and "
-            "submissions will appear under this name."
+    for i, left in enumerate(lefts):
+        spans.append(
+            '<span class="bg-popper" style="left:%d%%;animation-delay:%.2fs">%s</span>'
+            % (left, (i % 6) * 0.12, emojis[i % len(emojis)])
         )
 
-        with st.form("welcome_form", clear_on_submit=False):
+    css = (
+        "<style>"
+        "@keyframes bgPopperRise {"
+        "0% { transform: translateY(0) scale(.4) rotate(0deg); opacity: 0; }"
+        "15% { opacity: 1; }"
+        "100% { transform: translateY(-75vh) scale(1.4) rotate(45deg); opacity: 0; }"
+        "}"
+        ".bg-popper {"
+        "position: fixed; bottom: -10px; font-size: 2.2rem;"
+        "pointer-events: none; z-index: 99999;"
+        "animation: bgPopperRise 2.6s ease-out forwards;"
+        "}"
+        "</style>"
+    )
 
-            entered = st.text_input(
-                "Your name",
-                placeholder="e.g. Priya",
-                max_chars=40
-            )
-
-            go = st.form_submit_button(
-                "Continue →",
-                type="primary",
-                use_container_width=True
-            )
-
-        if go:
-
-            if entered.strip():
-                st.session_state["user_name"] = entered.strip()
-                st.rerun()
-
-            else:
-                st.warning("Please enter your name to continue.")
-
-    st.stop()
+    st.markdown(
+        css
+        + '<div data-burst="' + str(time.time_ns()) + '">'
+        + "".join(spans)
+        + "</div>",
+        unsafe_allow_html=True
+    )
 
 
 # ---------------- sidebar ----------------
@@ -565,7 +498,7 @@ with st.sidebar:
 
     who = st.text_input(
         "Display name",
-        st.session_state["user_name"],
+        "Krish",
         key="display_name"
     )
 
@@ -574,40 +507,22 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-    if not st.session_state.get("demo_seen"):
-        st.markdown(
-            "<style>@keyframes bgbounce{0%,100%{transform:translateY(0)}"
-            "50%{transform:translateY(7px)}}</style>"
-            "<div style='background:#F1EEFF;border:1px dashed #6C5CE7;"
-            "border-radius:12px;padding:8px 10px;font-size:.82rem;"
-            "color:#4C3FB5;font-weight:600;text-align:center;margin-bottom:4px'>"
-            "New here? Load sample data to explore "
-            "<span style='display:inline-block;font-size:1.2rem;"
-            "animation:bgbounce 1s ease-in-out infinite'>⬇️</span></div>",
-            unsafe_allow_html=True
-        )
-
     if st.button(
         "🎬 Demo data",
         use_container_width=True
     ):
-        st.session_state["demo_seen"] = True
         try:
             added = seed()
 
-            _demo = "Messy launch post"
-
-            st.session_state["sample_choice"] = _demo
-            st.session_state["t_" + _demo] = _demo
-            st.session_state["x_" + _demo] = SAMPLES[_demo]
-
-            st.success(
-                "Demo data ready! A sample post is loaded in "
-                "'Review content'. Click 🚀 Run review to test it. "
-                "More samples are under 'Quick samples'."
-            )
-
-            open_tab("Review content")
+            if added:
+                st.success(
+                    f"Loaded {added} demo submission(s)."
+                )
+            else:
+                st.info(
+                    "Demo examples are already loaded. "
+                    "No duplicates were added."
+                )
 
         except Exception as e:
             st.error("Could not save demo data: %s" % e)
@@ -639,10 +554,10 @@ with st.sidebar:
                 type="primary"
             ):
                 try:
-                    _reset = load()
-                    _reset["items"] = []
-                    _reset["log"] = []
-                    save(_reset)
+                    save({
+                        "items": [],
+                        "log": []
+                    })
 
                     for key in (
                         "res",
@@ -715,8 +630,7 @@ with T_review:
         sample = st.radio(
             "Quick samples",
             ["✏️ Write my own"] + list(SAMPLES),
-            horizontal=True,
-            key="sample_choice"
+            horizontal=True
         )
 
         title = st.text_input(
@@ -835,64 +749,166 @@ with T_review:
                 "to Streamlit secrets."
             )
 
-        if st.button(
-            "🚀 Run review",
+        # ---- Run review: instant feedback, no double-clicks ----
+        REVIEW_BUSY_LIMIT = 150  # seconds; stops a stuck "busy" flag locking the button
+
+        def _start_review():
+            st.session_state["review_busy_at"] = time.time()
+
+        _busy_at = st.session_state.get("review_busy_at")
+
+        review_busy = (
+            bool(_busy_at)
+            and (time.time() - _busy_at) < REVIEW_BUSY_LIMIT
+        )
+
+        st.button(
+            "⏳ Reviewing… please wait" if review_busy else "🚀 Run review",
             type="primary",
-            disabled=document_error
-        ):
+            disabled=(document_error or review_busy),
+            on_click=_start_review,
+            key="run_review_btn"
+        )
 
-            if not text.strip():
+        review_notice = st.session_state.pop("review_notice", None)
 
-                st.warning("Add some text first.")
+        if review_notice:
+            st.warning(review_notice)
 
-            else:
+        if review_busy:
 
-                st.toast("Review started…", icon="🔍")
-                with st.spinner("🔍 Reviewing your content. The AI check can take up to ~30 seconds…"):
-                    findings = (
-                        []
-                        if is_document
-                        else review(text, RB)
-                    )
+            try:
 
-                    ai_status = "rules_only"
-                    ai_error = ""
+                if not text.strip():
 
-                    if use_ai:
+                    st.session_state["review_notice"] = "Add some text first."
 
-                        try:
+                else:
 
-                            ai_findings = run_ai_check(
-                                text,
-                                RB,
-                                api_key(),
-                                model_name(),
-                                brand_mode=not is_document
+                    with st.status(
+                        "Reviewing your content…",
+                        expanded=True
+                    ) as review_status:
+
+                        started = time.time()
+
+                        st.write("⏳ Step 1 of 3: running the rulebook checks…")
+
+                        findings = (
+                            []
+                            if is_document
+                            else review(text, RB)
+                        )
+
+                        st.write(
+                            "✅ Rulebook checks done: %d finding(s)."
+                            % len(findings)
+                        )
+
+                        retrieved = evidence.retrieve(text, RB)
+
+                        st.write(
+                            "📚 Retrieved %d approved source(s) relevant to "
+                            "this draft. The AI will only see these."
+                            % len(retrieved)
+                        )
+
+                        ai_status = "rules_only"
+                        ai_error = ""
+
+                        if use_ai:
+
+                            st.write(
+                                "🤖 Step 2 of 3: the AI is reading your text "
+                                "(English, Hindi, Hinglish). This can take up "
+                                "to about a minute. Please don't click again."
                             )
 
-                            findings = merge_findings(
-                                findings,
-                                ai_findings
-                            )
+                            try:
 
-                            ai_status = "completed"
+                                ai_findings = run_ai_check(
+                                    text,
+                                    evidence.grounded_rulebook(RB, retrieved),
+                                    api_key(),
+                                    model_name(),
+                                    brand_mode=not is_document
+                                )
 
-                        except Exception as e:
+                                findings = merge_findings(
+                                    findings,
+                                    ai_findings
+                                )
 
-                            ai_status = "unverified"
-                            ai_error = str(e)
+                                ai_status = "completed"
 
-                draft_id = get_draft_id(title, who)
+                                st.write(
+                                    "✅ AI moderation completed in %.0f s."
+                                    % (time.time() - started)
+                                )
 
-                st.session_state["res"] = (
-                    time.time_ns(),
-                    text,
-                    findings,
-                    title,
-                    ai_status,
-                    ai_error,
-                    draft_id
+                            except Exception as e:
+
+                                ai_status = "unverified"
+                                ai_error = str(e)
+
+                                st.write(
+                                    "⚠️ AI moderation did not complete. "
+                                    "The result will show UNVERIFIED, "
+                                    "never Safe."
+                                )
+
+                        findings = evidence.verify_findings(
+                            findings,
+                            RB,
+                            retrieved
+                        )
+
+                        st.write("📋 Step 3 of 3: preparing your results…")
+
+                        draft_id = get_draft_id(title, who)
+
+                        new_rid = time.time_ns()
+
+                        st.session_state["res_evidence"] = {
+                            "rid": new_rid,
+                            "retrieved": retrieved,
+                            "summary": evidence.summarise(findings)
+                        }
+
+                        st.session_state["res"] = (
+                            new_rid,
+                            text,
+                            findings,
+                            title,
+                            ai_status,
+                            ai_error,
+                            draft_id
+                        )
+
+                        review_status.update(
+                            label="Review ready in %.0f s"
+                            % (time.time() - started),
+                            state="complete",
+                            expanded=False
+                        )
+
+                        st.toast(
+                            "Review ready" if ai_status != "unverified"
+                            else "Review finished: AI check UNVERIFIED",
+                            icon="✅" if ai_status != "unverified" else "⚠️"
+                        )
+
+            except Exception as exc:
+
+                st.session_state["review_notice"] = (
+                    "The review could not be completed: %s" % exc
                 )
+
+            finally:
+
+                st.session_state["review_busy_at"] = None
+
+            st.rerun()
 
     with right:
 
@@ -965,6 +981,12 @@ with T_review:
                 "No overall Safe result is being claimed."
             )
 
+        _ev = st.session_state.get("res_evidence")
+
+        if _ev and _ev.get("rid") == rid:
+
+            evidence.render_panel(st, _ev)
+
         applied = {
             i
             for i, finding in enumerate(F)
@@ -1022,6 +1044,11 @@ with T_review:
                     unsafe_allow_html=True
                 )
 
+                st.markdown(
+                    evidence.badge_html(finding),
+                    unsafe_allow_html=True
+                )
+
                 x1, x2, _ = st.columns(
                     [1.3, 1.8, 3]
                 )
@@ -1055,7 +1082,7 @@ with T_review:
         if role == "Creator":
 
             submit_clicked = st.button(
-                "📤 Submit for approval",
+                "📤 Submit for approval 🎉",
                 type="primary",
                 disabled=already_submitted,
                 key="submit_" + str(rid)
@@ -1077,13 +1104,13 @@ with T_review:
 
         if submit_clicked:
 
+            st.toast("Submitting your draft…", icon="⏳")
+
             if not final.strip():
 
                 st.warning("Final text cannot be empty.")
 
             else:
-
-                st.toast("Submitting your draft…", icon="⏳")
 
                 try:
 
@@ -1167,7 +1194,6 @@ with T_review:
                             )
 
                         st.balloons()
-
                         party_poppers()
 
                         st.toast(
@@ -1240,25 +1266,28 @@ with T_image:
             key="run_image_review"
         ):
 
-            st.toast("Image review started…", icon="🔎")
-            with st.spinner("🔎 Reviewing your image. The AI check can take up to ~30 seconds…"):
-                data = img.getvalue()
+            data = img.getvalue()
 
-                local = []
-                vf = []
-                extracted = ""
-                vstatus = "not_configured"
-                verr = ""
+            local = []
+            vf = []
+            extracted = ""
+            vstatus = "not_configured"
+            verr = ""
 
-                try:
+            try:
 
-                    local = uploads.local_image_checks(
-                        data,
-                        alt,
-                        RB
-                    )
+                local = uploads.local_image_checks(
+                    data,
+                    alt,
+                    RB
+                )
 
-                    if has_key():
+                if has_key():
+
+                    with st.spinner(
+                        "🤖 The AI is reviewing the image… this can take up "
+                        "to a minute. Please don't click again."
+                    ):
 
                         try:
 
@@ -1277,30 +1306,30 @@ with T_image:
                             vstatus = "unverified"
                             verr = str(e)
 
-                    tf = (
-                        review(extracted, RB)
-                        if extracted.strip()
-                        else []
-                    )
+                tf = (
+                    review(extracted, RB)
+                    if extracted.strip()
+                    else []
+                )
 
-                    st.session_state["img_res"] = {
-                        "rid": time.time_ns(),
-                        "sig": current_image_sig,
-                        "name": img.name,
-                        "alt": alt,
-                        "local": local,
-                        "vf": vf,
-                        "vstatus": vstatus,
-                        "verr": verr,
-                        "extracted": extracted,
-                        "tf": tf
-                    }
+                st.session_state["img_res"] = {
+                    "rid": time.time_ns(),
+                    "sig": current_image_sig,
+                    "name": img.name,
+                    "alt": alt,
+                    "local": local,
+                    "vf": vf,
+                    "vstatus": vstatus,
+                    "verr": verr,
+                    "extracted": extracted,
+                    "tf": tf
+                }
 
-                except Exception as e:
+            except Exception as e:
 
-                    st.error(
-                        "Could not review this image: %s" % e
-                    )
+                st.error(
+                    "Could not review this image: %s" % e
+                )
 
     else:
 
@@ -1422,13 +1451,11 @@ with T_image:
             )
 
             if st.button(
-                "📤 Submit image review for approval",
+                "📤 Submit image review for approval 🎉",
                 type="primary",
                 key="image_submit_button_" + str(r["rid"]),
                 disabled=image_already_submitted
             ):
-
-                st.toast("Submitting image review…", icon="⏳")
 
                 try:
 
@@ -1513,7 +1540,6 @@ with T_image:
                         st.session_state[image_submit_key] = True
 
                         st.balloons()
-
                         party_poppers()
 
                         st.toast(
@@ -1555,20 +1581,14 @@ with T_image:
             )
 
 
+
 # ---------------- tab 3: approval queue ----------------
 
 with T_queue:
 
-    _flash = st.session_state.pop("queue_flash", None)
-
-    if _flash:
-        st.toast(_flash[0], icon=_flash[1])
-        st.success(_flash[0])
-
     if st.session_state.pop("celebrate", False):
 
         st.balloons()
-
         party_poppers()
 
         st.toast(
@@ -1577,8 +1597,7 @@ with T_queue:
         )
 
     try:
-
-        d = load_cached()
+        d = load()
 
     except Exception as e:
 
@@ -1590,12 +1609,6 @@ with T_queue:
             "items": [],
             "log": []
         }
-
-    if role == "Creator":
-        st.caption(
-            "Creator view: you only see submissions made under "
-            "your display name. Reviewers see the full queue."
-        )
 
     if not d["items"]:
 
@@ -1611,9 +1624,6 @@ with T_queue:
 
     for it in d["items"]:
 
-        if role == "Creator" and it.get("author") not in (who, "Demo creator"):
-            continue
-
         it.setdefault("versions", [])
         it.setdefault("comments", [])
 
@@ -1621,6 +1631,7 @@ with T_queue:
 
         with st.container(border=True):
 
+            # Submission heading
             st.markdown(
                 "**%s** &nbsp; %s &nbsp; "
                 "<small>v%d · by %s</small>"
@@ -1635,14 +1646,15 @@ with T_queue:
                 unsafe_allow_html=True
             )
 
+            # Latest AI moderation status
             latest_status = latest_ai_status(it)
 
             if latest_status == "unverified":
 
                 st.error(
                     "⚠️ Latest AI moderation: UNVERIFIED. "
-                    "Approval is disabled until a successful AI review "
-                    "is completed in a new version."
+                    "Approval is disabled until a successful AI "
+                    "review is completed in a new version."
                 )
 
             elif latest_status == "rules_only":
@@ -1659,9 +1671,15 @@ with T_queue:
                     "Human review is still required."
                 )
 
-            with st.expander(
-                "Revision history and comments"
-            ):
+            else:
+
+                st.warning(
+                    "AI moderation is not verified as completed. "
+                    "Approval is disabled."
+                )
+
+            # Revision history
+            with st.expander("Revision history and comments"):
 
                 for k, v in enumerate(it["versions"]):
 
@@ -1689,8 +1707,7 @@ with T_queue:
                                 "Changes from previous version",
                                 diff_html(
                                     it["versions"][k - 1].get(
-                                        "text",
-                                        ""
+                                        "text", ""
                                     ),
                                     v.get("text", "")
                                 )
@@ -1711,8 +1728,7 @@ with T_queue:
                     if v.get("ai_error"):
 
                         st.caption(
-                            "AI error: "
-                            + ui.E(v["ai_error"])
+                            "AI error: " + ui.E(v["ai_error"])
                         )
 
                 for c in it["comments"]:
@@ -1728,6 +1744,8 @@ with T_queue:
                         )
                     )
 
+            # ---------------- role-based approval controls ----------------
+
             if role in ("Reviewer", "Manager", "Admin"):
 
                 msg = st.text_input(
@@ -1735,6 +1753,7 @@ with T_queue:
                     key="cm" + submission_id
                 )
 
+                # Reviewer permissions
                 if role == "Reviewer":
 
                     decisions = (
@@ -1743,10 +1762,10 @@ with T_queue:
                     )
 
                     st.caption(
-                        "Reviewer permissions: approve or request changes. "
-                        "You can also delete an unnecessary queue item."
+                        "Reviewer permissions: approve or request changes."
                     )
 
+                # Manager and Admin permissions
                 else:
 
                     decisions = (
@@ -1758,35 +1777,46 @@ with T_queue:
                     if role == "Manager":
 
                         st.caption(
-                            "Manager permissions: oversee submissions "
-                            "and approve, request changes or reject."
+                            "Manager permissions: approve, request "
+                            "changes, reject and delete submissions."
                         )
 
                     else:
 
                         st.caption(
-                            "Admin permissions: full review decisions "
-                            "and session administration."
+                            "Admin permissions: full review decisions, "
+                            "delete submissions and reset data."
                         )
 
-                cols = st.columns(len(decisions) + 1)
+                # IMPORTANT: Create columns for EVERY role.
+                # Reviewer gets 2 buttons.
+                # Manager/Admin get 3 decision buttons + Delete.
+                can_delete = role in ("Manager", "Admin")
 
-                for col, (label, status) in zip(
-                    cols,
-                    decisions
-                ):
+                cols = st.columns(
+                    len(decisions) + (1 if can_delete else 0)
+                )
+
+                # ---------------- decision buttons ----------------
+
+                for col, (label, status) in zip(cols, decisions):
 
                     approval_blocked = (
                         status == "Approved"
-                        and is_ai_unverified(it)
+                        and not is_ai_approval_ready(it)
                     )
 
                     if col.button(
                         label,
-                        key=label + submission_id,
+                        key="decision_" + status + "_" + submission_id,
                         disabled=approval_blocked,
                         use_container_width=True
                     ):
+
+                        st.toast(
+                            "Saving your decision...",
+                            icon="⏳"
+                        )
 
                         try:
 
@@ -1794,8 +1824,7 @@ with T_queue:
 
                             latest_item = next(
                                 (
-                                    x
-                                    for x in latest_data["items"]
+                                    x for x in latest_data["items"]
                                     if str(x.get("id")) == submission_id
                                 ),
                                 None
@@ -1808,58 +1837,50 @@ with T_queue:
                                     "Refresh the page."
                                 )
 
-                                st.stop()
-
-                            latest_item.setdefault("comments", [])
-                            latest_item.setdefault("versions", [])
-
-                            if (
-                                status == "Approved"
-                                and is_ai_unverified(latest_item)
+                            elif status == "Approved" and not is_ai_approval_ready(
+                                latest_item
                             ):
 
                                 st.error(
                                     "Approval blocked. The latest AI "
-                                    "moderation is UNVERIFIED."
-                                )
-
-                                st.stop()
-
-                            latest_item["status"] = status
-
-                            latest_item["comments"].append({
-                                "who": who,
-                                "role": role,
-                                "time": now(),
-                                "action": label.split(" ", 1)[1],
-                                "msg": msg or "-"
-                            })
-
-                            save(latest_data)
-
-                            if status == "Approved":
-                                st.balloons()
-                                party_poppers()
-                                st.toast(
-                                    "Approved! Ready to publish.",
-                                    icon="🎉"
-                                )
-                                st.success(
-                                    "🎉 Approved successfully! "
-                                    "The status chip updates on your next click."
+                                    "moderation must be completed successfully."
                                 )
 
                             else:
-                                if status == "Changes requested":
-                                    st.session_state["queue_flash"] = (
+
+                                latest_item.setdefault("comments", [])
+                                latest_item.setdefault("versions", [])
+
+                                latest_item["status"] = status
+
+                                latest_item["comments"].append({
+                                    "who": who,
+                                    "role": role,
+                                    "time": now(),
+                                    "action": label.split(" ", 1)[1],
+                                    "msg": msg.strip() if msg.strip() else "-"
+                                })
+
+                                save(latest_data)
+
+                                if status == "Approved":
+
+                                    st.session_state["celebrate"] = True
+
+                                elif status == "Changes requested":
+
+                                    st.toast(
                                         "Changes requested successfully.",
-                                        "✏️"
+                                        icon="✏️"
                                     )
+
                                 else:
-                                    st.session_state["queue_flash"] = (
+
+                                    st.toast(
                                         "Submission rejected.",
-                                        "⛔"
+                                        icon="⛔"
                                     )
+
                                 st.rerun()
 
                         except Exception as e:
@@ -1870,93 +1891,100 @@ with T_queue:
 
                 # ---------------- delete submission ----------------
 
-                delete_col = cols[-1]
+                if can_delete:
 
-                if delete_col.button(
-                    "🗑️ Delete",
-                    key="delete_" + submission_id,
-                    use_container_width=True
-                ):
+                    delete_col = cols[-1]
 
-                    st.session_state["delete_pending_id"] = submission_id
-                    st.rerun()
-
-                if (
-                    st.session_state.get("delete_pending_id")
-                    == submission_id
-                ):
-
-                    st.warning(
-                        "Are you sure you want to permanently delete "
-                        "this submission, including its revision history "
-                        "and comments? This cannot be undone."
-                    )
-
-                    confirm_col, cancel_col = st.columns(2)
-
-                    if confirm_col.button(
-                        "Yes, permanently delete",
-                        key="confirm_delete_" + submission_id,
-                        type="primary",
+                    if delete_col.button(
+                        "🗑️ Delete",
+                        key="delete_" + submission_id,
                         use_container_width=True
                     ):
 
-                        try:
+                        st.session_state["delete_pending_id"] = submission_id
+                        st.rerun()
 
-                            latest_data = load()
-
-                            deleted = delete_submission(
-                                latest_data,
-                                submission_id
-                            )
-
-                            if not deleted:
-
-                                st.error(
-                                    "This submission was already deleted "
-                                    "or no longer exists."
-                                )
-
-                            else:
-
-                                save(latest_data)
-
-                                st.session_state.pop(
-                                    "delete_pending_id",
-                                    None
-                                )
-
-                                st.session_state["queue_flash"] = (
-                                    "Submission deleted from the queue.",
-                                    "🗑️"
-                                )
-
-                            st.rerun()
-
-                        except Exception as e:
-
-                            st.error(
-                                "Could not delete this submission: %s" % e
-                            )
-
-                    if cancel_col.button(
-                        "Cancel",
-                        key="cancel_delete_" + submission_id,
-                        use_container_width=True
+                    if (
+                        st.session_state.get("delete_pending_id")
+                        == submission_id
                     ):
 
-                        st.session_state.pop(
-                            "delete_pending_id",
-                            None
+                        st.warning(
+                            "Are you sure you want to permanently delete "
+                            "this submission, including its revision history "
+                            "and comments? This cannot be undone."
                         )
 
-                        st.rerun()
+                        confirm_col, cancel_col = st.columns(2)
+
+                        if confirm_col.button(
+                            "Yes, permanently delete",
+                            key="confirm_delete_" + submission_id,
+                            type="primary",
+                            use_container_width=True
+                        ):
+
+                            try:
+
+                                latest_data = load()
+
+                                deleted = delete_submission(
+                                    latest_data,
+                                    submission_id
+                                )
+
+                                if not deleted:
+
+                                    st.error(
+                                        "This submission was already deleted "
+                                        "or no longer exists."
+                                    )
+
+                                else:
+
+                                    save(latest_data)
+
+                                    st.session_state.pop(
+                                        "delete_pending_id",
+                                        None
+                                    )
+
+                                    st.success(
+                                        "Submission and its revision "
+                                        "history were deleted successfully."
+                                    )
+
+                                    st.toast(
+                                        "Submission deleted.",
+                                        icon="🗑️"
+                                    )
+
+                                st.rerun()
+
+                            except Exception as e:
+
+                                st.error(
+                                    "Could not delete this submission: %s" % e
+                                )
+
+                        if cancel_col.button(
+                            "Cancel",
+                            key="cancel_delete_" + submission_id,
+                            use_container_width=True
+                        ):
+
+                            st.session_state.pop(
+                                "delete_pending_id",
+                                None
+                            )
+
+                            st.rerun()
 
             else:
 
                 st.caption(
-                    "🔒 Creator access is view-only in the approval queue. "
-                    "Switch to Reviewer to make decisions."
+                    "Only Reviewer, Manager and Admin roles can "
+                    "review submissions. Switch roles in the sidebar."
                 )
 
 
@@ -1975,7 +2003,7 @@ with T_insights:
 
         try:
 
-            d = load_cached()
+            d = load()
             log = pd.DataFrame(d["log"])
 
         except Exception as e:
@@ -2160,100 +2188,9 @@ with T_rulebook:
         )
     )
 
-    st.markdown("---")
+    with st.expander("View raw rulebook (JSON)"):
 
-    st.markdown("#### 💬 Share your feedback")
-
-    st.caption(
-        "Tell us what worked and what to improve. "
-        "Managers and Admins can read the feedback."
-    )
-
-    with st.form("feedback_form", clear_on_submit=True):
-
-        rating = st.select_slider(
-            "How was your experience?",
-            options=[
-                "😞 Poor",
-                "😐 Okay",
-                "🙂 Good",
-                "😄 Great",
-                "🤩 Excellent"
-            ],
-            value="🙂 Good"
-        )
-
-        fb_text = st.text_area(
-            "What worked well? What should we improve?",
-            max_chars=500,
-            height=100
-        )
-
-        fb_sent = st.form_submit_button(
-            "Send feedback",
-            type="primary"
-        )
-
-    if fb_sent:
-
-        if not fb_text.strip():
-
-            st.warning("Please write a short comment first.")
-
-        else:
-
-            try:
-
-                fb_data = load()
-
-                fb_data.setdefault("feedback", [])
-
-                fb_data["feedback"].append({
-                    "who": who,
-                    "role": role,
-                    "rating": rating,
-                    "msg": fb_text.strip()[:500],
-                    "time": now()
-                })
-
-                save(fb_data)
-
-                st.toast("Thank you for your feedback!", icon="💬")
-
-                st.success("Thank you! Your feedback was sent.")
-
-            except Exception as e:
-
-                st.error("Could not send feedback: %s" % e)
-
-    if role in ("Manager", "Admin"):
-
-        try:
-
-            fb_items = load_cached().get("feedback", [])
-
-        except Exception:
-
-            fb_items = []
-
-        st.markdown("**Recent feedback**")
-
-        if not fb_items:
-
-            st.caption("No feedback yet.")
-
-        for fb in reversed(fb_items[-8:]):
-
-            st.markdown(
-                "%s **%s** (%s, %s)  \n%s"
-                % (
-                    ui.E(fb.get("rating", "")),
-                    ui.E(fb.get("who", "Unknown")),
-                    ui.E(fb.get("role", "")),
-                    ui.E(fb.get("time", "")),
-                    ui.E(fb.get("msg", ""))
-                )
-            )
+        st.json(RB)
 
 
 # ---------------- footer ----------------
