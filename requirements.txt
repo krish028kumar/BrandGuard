@@ -1,9 +1,9 @@
 streamlit
 pandas
+numpy
 anthropic
 pypdf
 python-docx
 Pillow
 pytesseract
-pdf2image
 libsql
